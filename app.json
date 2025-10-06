@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "newArchEnabled": true,
+    "name": "Caloria",
+    "slug": "caloria",
+    "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
+    "scheme": "caloria",
+    
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "platforms": ["ios", "android"],
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "softwareKeyboardLayoutMode": "pan",
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "enableOnBackInvokedCallback": false
+      }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "87766ac6-7feb-4131-a0c6-e7f0e78f2071"
+      }
+    },
+    "owner": "thomino",
+    "updates": {
+      "url": "https://u.expo.dev/87766ac6-7feb-4131-a0c6-e7f0e78f2071"
+    }
+  }
+}
