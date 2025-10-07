@@ -81,8 +81,8 @@ echo.
 rem 7. Optional create new branch
 set /p newYN=Create new branch? (y/n) 
 if /i "%newYN%"=="y" (
-    echo.
-    for /f "tokens=1,2 delims=-" %%a in ("%branch%") do (
+    echo
+	for /f "tokens=1,2 delims=-" %%a in ("%branch%") do (
         set prefix=%%a
         set version=%%b
     )
