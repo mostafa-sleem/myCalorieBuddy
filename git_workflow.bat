@@ -1,117 +1,70 @@
 @echo off
-title MyCalorieBuddy Git Workflow
 color 0A
-setlocal enabledelayedexpansion
+title MyCalorieBuddy Git Workflow
 
-echo ====================================================
-echo     MyCalorieBuddy Automated Git Workflow Script
-echo ====================================================
+echo ===============================================
+echo        MyCalorieBuddy Git Workflow Script
+echo ===============================================
 echo.
 
-:: Step 1 - Detect current branch cleanly
-for /f %%a in ('git symbolic-ref --short HEAD 2^>nul') do set "branch=%%a"
-
-if "%branch%"=="" (
-    echo Error: Could not detect current branch.
-    echo Please run this script inside a valid Git repository.
-    goto END
+rem 1. Make sure we're inside a git repo
+git rev-parse --is-inside-work-tree >nul 2>&1
+if errorlevel 1 (
+    echo This is not a Git repository.
+    pause
+    exit /b
 )
 
-echo Current branch detected: %branch%
+rem 2. Show current branch
+for /f %%a in ('git branch --show-current') do set branch=%%a
+echo Current branch: %branch%
 echo.
 
-:: Step 2 - Get commit message
-set /p commitMsg=Enter commit message: 
-if "%commitMsg%"=="" set "commitMsg=Update"
-echo.
-echo Adding and committing changes...
+rem 3. Commit
+set /p msg=Commit message: 
+if "%msg%"=="" set msg=Update
 git add .
-git commit -m "%commitMsg%"
+git commit -m "%msg%"
 echo.
 
-:: Step 3 - Push to current branch
-echo Pushing changes to branch: %branch%
-git push origin "%branch%"
-echo.
-
-:: Step 4 - Tag version (optional)
-set /p tagChoice=Do you want to tag this version? (y/n): 
-if /i "%tagChoice%"=="y" (
-    call :TagVersion
-) else (
-    echo Skipping tagging step.
+rem 4. Push
+echo Pushing to %branch%...
+git push origin %branch%
+if errorlevel 1 (
+    echo Push failed. Check errors above.
+    pause
+    exit /b
 )
+echo Done.
 echo.
 
-:: Step 5 - Push to main (optional)
-set /p mainChoice=Do you want to push this branch to main? (y/n): 
-if /i "%mainChoice%"=="y" (
-    echo Pushing current branch (%branch%) to main...
-    git push origin "%branch%":main --force
-    echo Main branch updated successfully.
-) else (
-    echo Skipping push to main.
+rem 5. Tag (optional)
+set /p tagYN=Tag this version? (y/n): 
+if /i "%tagYN%"=="y" (
+    set /p tagName=Tag name (v1.3): 
+    set /p tagMsg=Tag message: 
+    git tag -a "%tagName%" -m "%tagMsg%"
+    git push origin "%tagName%"
 )
-echo.
 
-:: Step 6 - Create new branch (optional)
-set /p branchChoice=Do you want to create a new branch? (y/n): 
-if /i "%branchChoice%"=="y" (
-    call :CreateBranch
-) else (
-    echo Skipping branch creation.
+echo.
+rem 6. Push to main (optional)
+set /p mainYN=Push to main? (y/n): 
+if /i "%mainYN%"=="y" (
+    git push origin %branch%:main --force
 )
-echo.
 
-:END
-echo ====================================================
-echo Workflow completed. Review messages above.
-echo ====================================================
 echo.
+rem 7. Create new branch (optional)
+set /p newYN=Create new branch? (y/n): 
+if /i "%newYN%"=="y" (
+    set /p newBranch=New branch name: 
+    if "%newBranch%"=="" set newBranch=wip-next
+    git checkout -b %newBranch%
+    echo Switched to %newBranch%.
+)
+
+echo ===============================================
+echo Workflow complete.
+echo ===============================================
 pause
-exit /b
-
-
-:: ---------- Subroutine: Tag Version ----------
-:TagVersion
-set /p tagName=Enter tag name (e.g. v1.3): 
-set /p tagMsg=Enter tag message: 
-if "%tagName%"=="" (
-    echo Tag name cannot be empty. Skipping tagging.
-    goto :eof
-)
-git tag -a "%tagName%" -m "%tagMsg%"
-git push origin "%tagName%"
-echo Tag "%tagName%" created and pushed successfully.
-goto :eof
-
-
-:: ---------- Subroutine: Create New Branch ----------
-:CreateBranch
-set "prefix="
-set "version="
-
-for /f "tokens=1,2 delims=-" %%a in ("%branch%") do (
-    set "prefix=%%a"
-    set "version=%%b"
-)
-
-for /f "tokens=1,2 delims=." %%a in ("%version%") do (
-    set "major=%%a"
-    set "minor=%%b"
-)
-
-if "%minor%"=="" set "minor=0"
-set /a nextMinor=%minor%+1
-set "suggestedBranch=%prefix%-%major%.%nextMinor%"
-
-set /p customBranch=Enter new branch name (or press Enter to use "%suggestedBranch%"): 
-if "%customBranch%"=="" (
-    set "finalBranch=%suggestedBranch%"
-) else (
-    set "finalBranch=%customBranch%"
-)
-
-git checkout -b "%finalBranch%"
-echo Switched to new branch: %finalBranch%
-goto :eof
