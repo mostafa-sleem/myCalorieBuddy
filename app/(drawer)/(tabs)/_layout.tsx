@@ -45,6 +45,13 @@ export default function Layout() {
           <ActionTab />
         </View>
 
+         {/* 🧾 Dashboard Tab (NEW) */}
+        <TabTrigger name="dashboard" href="/dashboard" asChild>
+          <TabButton labelAnimated={true} icon="Notebook">
+            Dashboard
+          </TabButton>
+        </TabTrigger>
+
         {/* 🍽️ Meals Tab */}
         <TabTrigger name="meals" href="/meals" asChild>
           <TabButton labelAnimated={true} icon="Utensils">
