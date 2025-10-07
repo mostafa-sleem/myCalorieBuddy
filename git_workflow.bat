@@ -7,9 +7,9 @@ echo     MyCalorieBuddy Automated Git Workflow Script
 echo ====================================================
 echo.
 
-:: Step 1 - Detect current branch (clean version)
-for /f "tokens=2 delims=." %%b in ('git status -b --porcelain ^| findstr "##"') do set branch=%%b
-for /f "tokens=1 delims= " %%c in ("%branch%") do set branch=%%c
+:: Step 1 - Detect current branch cleanly
+for /f "tokens=2" %%a in ('git symbolic-ref --short HEAD') do set branch=%%a
+for /f %%a in ('git symbolic-ref --short HEAD') do set branch=%%a
 
 echo Current branch detected: %branch%
 echo.
