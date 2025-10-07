@@ -79,7 +79,7 @@ if /i "%mainYN%"=="y" (
 echo.
 
 rem 7. Optional create new branch
-set /p newYN=Create new branch? (y/n) 
+set /p newYN=Create new branch? (y/n): 
 if /i "%newYN%"=="y" (
     echo.
     echo --- Creating new branch ---
@@ -104,15 +104,22 @@ if /i "%newYN%"=="y" (
     if "%minor%"=="" set minor=0
     set /a nextMinor=%minor%+1
     set suggested=%prefix%-%major%.%nextMinor%
-    echo Suggested new branch name %suggested%
-    set /p name=Enter new branch name (press Enter to use suggested) 
+    echo Suggested new branch name: %suggested%
+    set /p name=Enter new branch name (press Enter to use suggested): 
     if "%name%"=="" set name=%suggested%
     echo Creating new branch "%name%" ...
     git checkout -b "%name%"
     if errorlevel 1 (
         echo Failed to create branch. Please check the name.
     ) else (
-        echo Switched to new branch %name%
+        echo Switched to new branch: %name%
+        echo Pushing new branch "%name%" to origin...
+        git push -u origin "%name%"
+        if errorlevel 1 (
+            echo WARNING: Push of new branch failed. Check connection or permissions.
+        ) else (
+            echo Branch "%name%" pushed successfully and tracking set.
+        )
     )
 )
 echo.
