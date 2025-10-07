@@ -96,7 +96,7 @@ if /i "%newYN%"=="y" (
     set /p name=Enter new branch name (Enter = %suggested%): 
     if "%name%"=="" set name=%suggested%
     git checkout -b %name%
-    echo Switched to new branch: %name%
+    echo Switched to new branch %name%
 )
 echo.
 
