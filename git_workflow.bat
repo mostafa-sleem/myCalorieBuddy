@@ -47,7 +47,7 @@ rem 5. Optional tagging
 set /p tagYN=Tag this version? (y/n) 
 if /i "%tagYN%"=="y" (
     echo.
-    set /p tagName=Enter tag name (e.g. V_1.3)
+    set /p tagName=Enter tag name 
     if "%tagName%"=="" (
         echo Tag name cannot be empty. Skipping tagging.
     ) else (
@@ -79,7 +79,7 @@ if /i "%mainYN%"=="y" (
 echo.
 
 rem 7. Optional create new branch
-set /p newYN=Create new branch? (y/n): 
+set /p newYN=Create new branch? (y/n) 
 if /i "%newYN%"=="y" (
     echo.
     echo --- Creating new branch ---
