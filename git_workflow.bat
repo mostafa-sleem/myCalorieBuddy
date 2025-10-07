@@ -51,7 +51,7 @@ if /i "%tagYN%"=="y" (
     if "%tagName%"=="" (
         echo Tag name cannot be empty. Skipping tagging.
     ) else (
-        set /p tagMsg=Enter tag message: 
+        set /p tagMsg=Enter tag message 
         echo Creating tag "%tagName%"...
         git tag -a "%tagName%" -m "%tagMsg%"
         git push origin "%tagName%"
@@ -104,15 +104,15 @@ if /i "%newYN%"=="y" (
     if "%minor%"=="" set minor=0
     set /a nextMinor=%minor%+1
     set suggested=%prefix%-%major%.%nextMinor%
-    echo Suggested new branch name: %suggested%
-    set /p name=Enter new branch name (press Enter to use suggested): 
+    echo Suggested new branch name %suggested%
+    set /p name=Enter new branch name (press Enter to use suggested) 
     if "%name%"=="" set name=%suggested%
     echo Creating new branch "%name%" ...
     git checkout -b "%name%"
     if errorlevel 1 (
         echo Failed to create branch. Please check the name.
     ) else (
-        echo Switched to new branch: %name%
+        echo Switched to new branch %name%
     )
 )
 echo.
