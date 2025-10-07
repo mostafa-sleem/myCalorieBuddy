@@ -12,10 +12,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { appendFood, FoodEntry } from '../../../lib/storage'; // ✅ Correct relative import
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([
-    { from: 'bot', text: 'Hello! 👋 I’m Buddy, your calorie tracking assistant. How can I help today?' },
+    {
+      from: 'bot',
+      text: 'Hello! 👋 I’m Buddy, your calorie tracking assistant. How can I help today?',
+    },
   ]);
   const [input, setInput] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
@@ -33,22 +37,51 @@ export default function ChatScreen() {
     setInput('');
 
     try {
-      // 👇 Replace this with your NGROK URL (not localhost!)
-      const response = await fetch('https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
-      });
+      const response = await fetch(
+        'https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', // 🔗 your backend
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: input }),
+        }
+      );
 
-      const data = await response.json();
-      setMessages([
-        ...newMessages,
-        { from: 'bot', text: data.reply || 'No response from server 😅' },
+      const { reply, data } = await response.json();
+
+      // 🧠 Save parsed food data if found
+      if (data?.food) {
+        const entry: FoodEntry = {
+          id: `${Date.now()}`,
+          food: String(data.food),
+          quantity:
+            typeof data.quantity === 'number' ? data.quantity : undefined,
+          unit: data.unit || undefined,
+          calories:
+            typeof data.calories === 'number' ? data.calories : undefined,
+          ts: new Date().toISOString(),
+        };
+        await appendFood(entry);
+        console.log('✅ Saved food entry:', entry);
+
+        // Optional: confirm in chat
+        setMessages((prev) => [
+          ...prev,
+          {
+            from: 'bot',
+            text: `✅ Logged "${entry.food}" (${entry.calories ?? 'unknown'} kcal)`,
+          },
+        ]);
+      }
+
+      // 💬 Always show Buddy’s friendly reply
+      setMessages((prev) => [
+        ...prev,
+        { from: 'bot', text: reply || 'No response from server 😅' },
       ]);
     } catch (error) {
-      console.error(error);
-      setMessages([
-        ...newMessages,
+      console.error('❌ Chat fetch error:', error);
+      setMessages((prev) => [
+        ...prev,
         { from: 'bot', text: '❌ Connection error. Please try again later.' },
       ]);
     }
@@ -80,7 +113,9 @@ export default function ChatScreen() {
                     msg.from === 'user' ? styles.userText : styles.botText,
                   ]}
                 >
-                  {msg.from === 'user' ? `You: ${msg.text}` : `Buddy: ${msg.text}`}
+                  {msg.from === 'user'
+                    ? `You: ${msg.text}`
+                    : `Buddy: ${msg.text}`}
                 </Text>
               </View>
             ))}
@@ -104,41 +139,20 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    flex: 1,
-  },
-  chatContainer: {
-    padding: 12,
-    paddingBottom: 100,
-  },
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
+  chatContainer: { padding: 12, paddingBottom: 100 },
   messageBubble: {
     marginVertical: 6,
     padding: 12,
     borderRadius: 18,
     maxWidth: '85%',
   },
-  userBubble: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#DCF8C6', // WhatsApp green
-  },
-  botBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F1F1F1',
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  userText: {
-    color: '#000',
-  },
-  botText: {
-    color: '#333',
-  },
+  userBubble: { alignSelf: 'flex-end', backgroundColor: '#DCF8C6' },
+  botBubble: { alignSelf: 'flex-start', backgroundColor: '#F1F1F1' },
+  messageText: { fontSize: 16, lineHeight: 22 },
+  userText: { color: '#000' },
+  botText: { color: '#333' },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
