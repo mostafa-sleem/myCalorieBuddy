@@ -82,39 +82,40 @@ rem 7. Optional create new branch
 set /p newYN=Create new branch? (y/n): 
 if /i "%newYN%"=="y" (
     echo.
-    rem Enable delayed expansion just for this block
-    setlocal enabledelayedexpansion
+    echo --- Creating new branch ---
+)
 
-    rem --- Parse branch parts safely ---
+if /i "%newYN%"=="y" (
+    rem Extract prefix and version
     for /f "tokens=1,2 delims=-" %%a in ("%branch%") do (
-        set "prefix=%%a"
-        set "version=%%b"
+        call set prefix=%%a
+        call set version=%%b
     )
-    for /f "tokens=1,2 delims=." %%a in ("!version!") do (
-        set "major=%%a"
-        set "minor=%%b"
+)
+
+if /i "%newYN%"=="y" (
+    for /f "tokens=1,2 delims=." %%a in ("%version%") do (
+        call set major=%%a
+        call set minor=%%b
     )
+)
 
-    if "!minor!"=="" set "minor=0"
-    set /a nextMinor=!minor!+1
-    set "suggested=!prefix!-!major!.!nextMinor!"
-
-    echo Suggested new branch name: !suggested!
+if /i "%newYN%"=="y" (
+    if "%minor%"=="" set minor=0
+    set /a nextMinor=%minor%+1
+    set suggested=%prefix%-%major%.%nextMinor%
+    echo Suggested new branch name: %suggested%
     set /p name=Enter new branch name (press Enter to use suggested): 
-    if "!name!"=="" set "name=!suggested!"
-
-    echo Creating new branch "!name!" ...
-    git checkout -b "!name!"
+    if "%name%"=="" set name=%suggested%
+    echo Creating new branch "%name%" ...
+    git checkout -b "%name%"
     if errorlevel 1 (
         echo Failed to create branch. Please check the name.
     ) else (
-        echo Switched to new branch: !name!
+        echo Switched to new branch: %name%
     )
-
-    endlocal
 )
 echo.
-
 echo ===============================================
 echo Workflow complete.
 echo ===============================================
