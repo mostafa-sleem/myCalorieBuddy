@@ -1,13 +1,13 @@
 @echo off
 color 0A
-title MyCalorieBuddy Git Workflow
+title MyCalorieBuddy Git Workflow (Final Stable)
 
 echo ===============================================
 echo        MyCalorieBuddy Git Workflow Script
 echo ===============================================
 echo.
 
-rem 1. Make sure we're inside a git repo
+rem 1. Verify git repo
 git rev-parse --is-inside-work-tree >nul 2>&1
 if errorlevel 1 (
     echo This is not a Git repository.
@@ -15,56 +15,93 @@ if errorlevel 1 (
     exit /b
 )
 
-rem 2. Show current branch
+rem 2. Detect branch
 for /f %%a in ('git branch --show-current') do set branch=%%a
+if "%branch%"=="" (
+    echo Could not detect current branch.
+    pause
+    exit /b
+)
 echo Current branch: %branch%
 echo.
 
-rem 3. Commit
+rem 3. Commit changes
 set /p msg=Commit message: 
 if "%msg%"=="" set msg=Update
 git add .
 git commit -m "%msg%"
 echo.
 
-rem 4. Push
-echo Pushing to %branch%...
+rem 4. Push to branch
+echo Pushing to %branch% ...
 git push origin %branch%
 if errorlevel 1 (
-    echo Push failed. Check errors above.
+    echo Push failed. See messages above.
     pause
     exit /b
 )
 echo Done.
 echo.
 
-rem 5. Tag (optional)
+rem 5. Optional tagging (inline, no :labels)
 set /p tagYN=Tag this version? (y/n): 
 if /i "%tagYN%"=="y" (
-    set /p tagName=Tag name (v1.3): 
-    set /p tagMsg=Tag message: 
-    git tag -a "%tagName%" -m "%tagMsg%"
-    git push origin "%tagName%"
+    echo.
+    set /p tagName=Enter tag name (e.g. v1.3): 
+    if "%tagName%"=="" (
+        echo Tag name cannot be empty. Skipping tagging.
+    ) else (
+        set /p tagMsg=Enter tag message: 
+        echo Creating tag "%tagName%"...
+        git tag -a "%tagName%" -m "%tagMsg%"
+        git push origin "%tagName%"
+        if errorlevel 1 (
+            echo WARNING: Tag push failed.
+        ) else (
+            echo Tag "%tagName%" pushed successfully.
+        )
+    )
 )
-
 echo.
-rem 6. Push to main (optional)
+
+rem 6. Optional push to main
 set /p mainYN=Push to main? (y/n): 
 if /i "%mainYN%"=="y" (
+    echo Pushing %branch% to main...
     git push origin %branch%:main --force
+    if errorlevel 1 (
+        echo Push to main failed. Check branch protection.
+        pause
+        exit /b
+    )
+    echo Main branch updated.
 )
-
 echo.
-rem 7. Create new branch (optional)
+
+rem 7. Optional create new branch
 set /p newYN=Create new branch? (y/n): 
 if /i "%newYN%"=="y" (
-    set /p newBranch=New branch name: 
-    if "%newBranch%"=="" set newBranch=wip-next
-    git checkout -b %newBranch%
-    echo Switched to %newBranch%.
+    echo.
+    for /f "tokens=1,2 delims=-" %%a in ("%branch%") do (
+        set prefix=%%a
+        set version=%%b
+    )
+    for /f "tokens=1,2 delims=." %%a in ("%version%") do (
+        set major=%%a
+        set minor=%%b
+    )
+    if "%minor%"=="" set minor=0
+    set /a nextMinor=%minor%+1
+    set suggested=%prefix%-%major%.%nextMinor%
+    set /p name=Enter new branch name (Enter = %suggested%): 
+    if "%name%"=="" set name=%suggested%
+    git checkout -b %name%
+    echo Switched to new branch: %name%
 )
+echo.
 
 echo ===============================================
 echo Workflow complete.
 echo ===============================================
 pause
+exit /b
