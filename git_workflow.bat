@@ -44,10 +44,10 @@ echo Done.
 echo.
 
 rem 5. Optional tagging (inline, no :labels)
-set /p tagYN=Tag this version? (y/n): 
+set /p tagYN=Tag this version? (y/n) 
 if /i "%tagYN%"=="y" (
     echo.
-    set /p tagName=Enter tag name (e.g. v1.3): 
+    set /p tagName=Enter tag name (e.g. v1.3) 
     if "%tagName%"=="" (
         echo Tag name cannot be empty. Skipping tagging.
     ) else (
@@ -65,7 +65,7 @@ if /i "%tagYN%"=="y" (
 echo.
 
 rem 6. Optional push to main
-set /p mainYN=Push to main? (y/n): 
+set /p mainYN=Push to main? (y/n) 
 if /i "%mainYN%"=="y" (
     echo Pushing %branch% to main...
     git push origin %branch%:main --force
@@ -79,7 +79,7 @@ if /i "%mainYN%"=="y" (
 echo.
 
 rem 7. Optional create new branch
-set /p newYN=Create new branch? (y/n): 
+set /p newYN=Create new branch? (y/n) 
 if /i "%newYN%"=="y" (
     echo.
     for /f "tokens=1,2 delims=-" %%a in ("%branch%") do (
