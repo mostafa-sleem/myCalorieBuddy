@@ -10,10 +10,13 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   View,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { appendFood, getFoods, FoodEntry } from '../../../lib/storage'; // ✅ updated
+import { appendFood, getFoods, FoodEntry } from '../../../lib/storage';
 import Svg, { Circle } from 'react-native-svg';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([
@@ -24,16 +27,31 @@ export default function ChatScreen() {
   ]);
   const [input, setInput] = useState('');
   const [consumed, setConsumed] = useState(0);
-  const [target] = useState(2200); // 🔹 daily target
+  const [target] = useState(2200);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const radius = 45;
+  // Circle setup
+  const radius = 55;
   const strokeWidth = 8;
   const circumference = 2 * Math.PI * radius;
-  const progress = Math.min(consumed / target, 1);
-  const offset = circumference - progress * circumference;
+  const animatedValue = useRef(new Animated.Value(0)).current;
 
-  // Load calories from saved entries whenever app renders or food is logged
+  // Animate ring when consumed changes
+  useEffect(() => {
+    const percentage = Math.min((consumed / target) * 100, 100);
+    Animated.timing(animatedValue, {
+      toValue: percentage,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [consumed]);
+
+  const offset = animatedValue.interpolate({
+    inputRange: [0, 100],
+    outputRange: [circumference, 0],
+  });
+
+  // Load saved calories once on mount
   useEffect(() => {
     const loadCalories = async () => {
       try {
@@ -47,10 +65,13 @@ export default function ChatScreen() {
         console.log('⚠️ Could not load foods', e);
       }
     };
-
     loadCalories();
-  }, []); // 👈 only runs once on mount
+  }, []);
 
+  // Auto-scroll chat
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [messages]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -85,11 +106,8 @@ export default function ChatScreen() {
         await appendFood(entry);
         console.log('✅ Saved food entry:', entry);
 
-        setConsumed(prev => prev + (entry.calories ?? 0));
-
-        const progress = Math.min(consumed / target, 1);
-
-
+        // update calories immediately
+        setConsumed((prev) => prev + (entry.calories ?? 0));
 
         setMessages((prev) => [
           ...prev,
@@ -115,39 +133,46 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 🔵 Circular progress summary */}
+      {/* 🔵 Animated Calorie Circle */}
       <View style={styles.summaryContainer}>
-        <Svg height="110" width="110" style={styles.svg}>
-          <Circle
-            stroke="#eee"
-            fill="none"
-            cx="55"
-            cy="55"
-            r={radius}
-            strokeWidth={strokeWidth}
-          />
-          <Circle
-            stroke="#4FA3F7"
-            fill="none"
-            cx="55"
-            cy="55"
-            r={radius}
-            strokeWidth={strokeWidth}
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-          />
-        </Svg>
-        <View style={styles.circleTextContainer}>
-          <Text style={styles.caloriesMain}>{consumed}</Text>
-          <Text style={styles.caloriesSub}>/ {target} kcal</Text>
-          <Text style={styles.remaining}>
-            {Math.max(target - consumed, 0)} remaining
-          </Text>
+        <View style={styles.circleWrapper}>
+          <Svg height="150" width="150" style={styles.svg}>
+            {/* background ring */}
+            <Circle
+              stroke="#E5E5E5"
+              fill="none"
+              cx="75"
+              cy="75"
+              r={radius}
+              strokeWidth={strokeWidth}
+            />
+            {/* animated progress ring */}
+            <AnimatedCircle
+              stroke="#4FA3F7"
+              fill="none"
+              cx="75"
+              cy="75"
+              r={radius}
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
+              transform={`rotate(-90 75 75)`}
+            />
+          </Svg>
+
+          {/* text inside circle */}
+          <View style={styles.circleTextContainer}>
+            <Text style={styles.caloriesMain}>{consumed}</Text>
+            <Text style={styles.caloriesSub}>/ {target} kcal</Text>
+            <Text style={styles.remaining}>
+              {Math.max(target - consumed, 0)} remaining
+            </Text>
+          </View>
         </View>
       </View>
 
-      {/* 💬 Chat */}
+      {/* 💬 Chat area */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -200,30 +225,40 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1 },
+
+  // Circle layout
   summaryContainer: {
     alignItems: 'center',
-    marginVertical: 10,
+    marginTop: 70,
+    marginBottom: 70,
+  },
+  circleWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   svg: { position: 'absolute' },
   circleTextContainer: {
-    justifyContent: 'center',
+    position: 'absolute',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   caloriesMain: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#222',
   },
   caloriesSub: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#777',
   },
   remaining: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#999',
-    marginTop: 4,
+    marginTop: 3,
   },
+
+  // Chat
   chatContainer: { padding: 12, paddingBottom: 100 },
   messageBubble: {
     marginVertical: 6,
@@ -236,6 +271,8 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 16, lineHeight: 22 },
   userText: { color: '#000' },
   botText: { color: '#333' },
+
+  // Input
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
