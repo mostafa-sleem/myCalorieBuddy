@@ -166,7 +166,7 @@ export default function ChatScreen() {
             <Text style={styles.caloriesMain}>{consumed}</Text>
             <Text style={styles.caloriesSub}>/ {target} kcal</Text>
             <Text style={styles.remaining}>
-              {Math.max(target - consumed, 0)} remaining
+              {/*{Math.max(target - consumed, 0)} remaining*/}
             </Text>
           </View>
         </View>
@@ -180,9 +180,25 @@ export default function ChatScreen() {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
             ref={scrollViewRef}
-            contentContainerStyle={styles.chatContainer}
-            showsVerticalScrollIndicator={false}
+            style={{
+              flex: 1,
+              paddingHorizontal: 10,
+              backgroundColor: '#63515144', // subtle background tone
+              borderTopLeftRadius: 25,    // smooth top rounding
+              borderTopRightRadius: 25,
+              marginTop: -20,             // overlaps slightly for seamless blend
+              shadowColor: '#ffffffff',
+              shadowOpacity: 0.2,
+              shadowOffset: { width: 0, height: -2 },
+              shadowRadius: 6,
+              elevation: 3,               // Android shadow
+            }}
+            contentContainerStyle={{
+              paddingTop: 10,
+              paddingBottom: 100,
+            }}
           >
+
             {messages.map((msg, index) => (
               <View
                 key={index}
@@ -229,8 +245,8 @@ const styles = StyleSheet.create({
   // Circle layout
   summaryContainer: {
     alignItems: 'center',
-    marginTop: 70,
-    marginBottom: 70,
+    marginTop: 130,
+    marginBottom: 100,
   },
   circleWrapper: {
     alignItems: 'center',
