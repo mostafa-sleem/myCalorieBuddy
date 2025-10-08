@@ -12,7 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { appendFood, FoodEntry } from '../../../lib/storage'; // ✅ Correct relative import
+import { appendFood, getFoods, FoodEntry } from '../../../lib/storage'; // ✅ updated
+import Svg, { Circle } from 'react-native-svg';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([
@@ -22,12 +23,34 @@ export default function ChatScreen() {
     },
   ]);
   const [input, setInput] = useState('');
+  const [consumed, setConsumed] = useState(0);
+  const [target] = useState(2200); // 🔹 daily target
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Automatically scroll to bottom when new message arrives
+  const radius = 45;
+  const strokeWidth = 8;
+  const circumference = 2 * Math.PI * radius;
+  const progress = Math.min(consumed / target, 1);
+  const offset = circumference - progress * circumference;
+
+  // Load calories from saved entries whenever app renders or food is logged
   useEffect(() => {
-    scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [messages]);
+    const loadCalories = async () => {
+      try {
+        const foods = await getFoods();
+        const total = foods.reduce(
+          (sum: number, f: FoodEntry) => sum + (f.calories ?? 0),
+          0
+        );
+        setConsumed(total);
+      } catch (e) {
+        console.log('⚠️ Could not load foods', e);
+      }
+    };
+
+    loadCalories();
+  }, []); // 👈 only runs once on mount
+
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -38,7 +61,7 @@ export default function ChatScreen() {
 
     try {
       const response = await fetch(
-        'https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', // 🔗 your backend
+        'https://ionogenic-micheal-debonairly.ngrok-free.dev/chat',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -48,7 +71,6 @@ export default function ChatScreen() {
 
       const { reply, data } = await response.json();
 
-      // 🧠 Save parsed food data if found
       if (data?.food) {
         const entry: FoodEntry = {
           id: `${Date.now()}`,
@@ -63,7 +85,12 @@ export default function ChatScreen() {
         await appendFood(entry);
         console.log('✅ Saved food entry:', entry);
 
-        // Optional: confirm in chat
+        setConsumed(prev => prev + (entry.calories ?? 0));
+
+        const progress = Math.min(consumed / target, 1);
+
+
+
         setMessages((prev) => [
           ...prev,
           {
@@ -73,7 +100,6 @@ export default function ChatScreen() {
         ]);
       }
 
-      // 💬 Always show Buddy’s friendly reply
       setMessages((prev) => [
         ...prev,
         { from: 'bot', text: reply || 'No response from server 😅' },
@@ -89,6 +115,39 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* 🔵 Circular progress summary */}
+      <View style={styles.summaryContainer}>
+        <Svg height="110" width="110" style={styles.svg}>
+          <Circle
+            stroke="#eee"
+            fill="none"
+            cx="55"
+            cy="55"
+            r={radius}
+            strokeWidth={strokeWidth}
+          />
+          <Circle
+            stroke="#4FA3F7"
+            fill="none"
+            cx="55"
+            cy="55"
+            r={radius}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+          />
+        </Svg>
+        <View style={styles.circleTextContainer}>
+          <Text style={styles.caloriesMain}>{consumed}</Text>
+          <Text style={styles.caloriesSub}>/ {target} kcal</Text>
+          <Text style={styles.remaining}>
+            {Math.max(target - consumed, 0)} remaining
+          </Text>
+        </View>
+      </View>
+
+      {/* 💬 Chat */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -141,6 +200,30 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1 },
+  summaryContainer: {
+    alignItems: 'center',
+    marginVertical: 10,
+    position: 'relative',
+  },
+  svg: { position: 'absolute' },
+  circleTextContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  caloriesMain: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#222',
+  },
+  caloriesSub: {
+    fontSize: 14,
+    color: '#777',
+  },
+  remaining: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
   chatContainer: { padding: 12, paddingBottom: 100 },
   messageBubble: {
     marginVertical: 6,
