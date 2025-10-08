@@ -16,6 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { appendFood, getFoods, FoodEntry } from '../../../lib/storage';
 import Svg, { Circle } from 'react-native-svg';
 
+// for greeting and date
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning!';
+  if (hour < 18) return 'Good afternoon!';
+  return 'Good evening!';
+};
+
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export default function ChatScreen() {
@@ -28,10 +36,47 @@ export default function ChatScreen() {
   const [input, setInput] = useState('');
   const [consumed, setConsumed] = useState(0);
   const [target] = useState(2200);
+  const [isTyping, setIsTyping] = useState(false);
+
+  // 🟢 Typing animation setup
+  const typingAnim = useRef(new Animated.Value(0)).current;
+  const typingAnim2 = useRef(new Animated.Value(0)).current;
+  const typingAnim3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const createLoop = (anim: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+            delay,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.3,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+    createLoop(typingAnim, 0).start();
+    createLoop(typingAnim2, 200).start();
+    createLoop(typingAnim3, 400).start();
+  }, []);
+
+  const greeting = getGreeting();
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Circle setup
-  const radius = 55;
+  const radius = 65;
   const strokeWidth = 8;
   const circumference = 2 * Math.PI * radius;
   const animatedValue = useRef(new Animated.Value(0)).current;
@@ -79,6 +124,8 @@ export default function ChatScreen() {
     const newMessages = [...messages, { from: 'user', text: input }];
     setMessages(newMessages);
     setInput('');
+    Keyboard.dismiss();
+    setIsTyping(true); // show typing indicator
 
     try {
       const response = await fetch(
@@ -118,11 +165,13 @@ export default function ChatScreen() {
         ]);
       }
 
+      setIsTyping(false); // stop typing before bot reply
       setMessages((prev) => [
         ...prev,
         { from: 'bot', text: reply || 'No response from server 😅' },
       ]);
     } catch (error) {
+      setIsTyping(false); // stop typing on error too
       console.error('❌ Chat fetch error:', error);
       setMessages((prev) => [
         ...prev,
@@ -133,11 +182,17 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* 🔵 Animated Calorie Circle */}
+      {/* 🔵 Top Greeting + Calorie Circle Section */}
       <View style={styles.summaryContainer}>
+        {/* Greeting + Date */}
+        <View style={styles.greetingContainer}>
+          <Text style={styles.greetingText}>{greeting}</Text>
+          <Text style={styles.dateText}>{today}</Text>
+        </View>
+
+        {/* Calorie Circle */}
         <View style={styles.circleWrapper}>
           <Svg height="150" width="150" style={styles.svg}>
-            {/* background ring */}
             <Circle
               stroke="#E5E5E5"
               fill="none"
@@ -146,7 +201,14 @@ export default function ChatScreen() {
               r={radius}
               strokeWidth={strokeWidth}
             />
-            {/* animated progress ring */}
+            <Circle
+              stroke="none"
+              fill="#e5e5e56a"
+              cx="75"
+              cy="75"
+              r={radius - 15}
+              strokeWidth={1}
+            />
             <AnimatedCircle
               stroke="#4FA3F7"
               fill="none"
@@ -161,15 +223,14 @@ export default function ChatScreen() {
             />
           </Svg>
 
-          {/* text inside circle */}
           <View style={styles.circleTextContainer}>
             <Text style={styles.caloriesMain}>{consumed}</Text>
             <Text style={styles.caloriesSub}>/ {target} kcal</Text>
-            <Text style={styles.remaining}>
-              {/*{Math.max(target - consumed, 0)} remaining*/}
-            </Text>
           </View>
         </View>
+
+        <Text style={styles.caloriesTodayText}>Calories Today</Text>
+        <View style={styles.separatorLine} />
       </View>
 
       {/* 💬 Chat area */}
@@ -183,22 +244,21 @@ export default function ChatScreen() {
             style={{
               flex: 1,
               paddingHorizontal: 10,
-              backgroundColor: '#63515144', // subtle background tone
-              borderTopLeftRadius: 25,    // smooth top rounding
+              backgroundColor: '#c6d1dfb4',
+              borderTopLeftRadius: 25,
               borderTopRightRadius: 25,
-              marginTop: -20,             // overlaps slightly for seamless blend
+              marginTop: -20,
               shadowColor: '#ffffffff',
               shadowOpacity: 0.2,
               shadowOffset: { width: 0, height: -2 },
               shadowRadius: 6,
-              elevation: 3,               // Android shadow
+              elevation: 3,
             }}
             contentContainerStyle={{
               paddingTop: 10,
               paddingBottom: 100,
             }}
           >
-
             {messages.map((msg, index) => (
               <View
                 key={index}
@@ -219,6 +279,15 @@ export default function ChatScreen() {
                 </Text>
               </View>
             ))}
+
+            {isTyping && (
+              <View style={[styles.botBubble, { flexDirection: 'row' }]}>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim }]}>●</Animated.Text>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim2, marginLeft: 3 }]}>●</Animated.Text>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim3, marginLeft: 3 }]}>●</Animated.Text>
+
+              </View>
+            )}
           </ScrollView>
         </TouchableWithoutFeedback>
 
@@ -241,11 +310,9 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1 },
-
-  // Circle layout
   summaryContainer: {
     alignItems: 'center',
-    marginTop: 130,
+    marginTop: 120,
     marginBottom: 100,
   },
   circleWrapper: {
@@ -259,22 +326,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  caloriesMain: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#222',
-  },
-  caloriesSub: {
-    fontSize: 15,
-    color: '#777',
-  },
-  remaining: {
-    fontSize: 13,
-    color: '#999',
-    marginTop: 3,
-  },
-
-  // Chat
+  caloriesMain: { fontSize: 26, fontWeight: '700', color: '#222' },
+  caloriesSub: { fontSize: 11, color: '#777' },
   chatContainer: { padding: 12, paddingBottom: 100 },
   messageBubble: {
     marginVertical: 6,
@@ -282,13 +335,40 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     maxWidth: '85%',
   },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#DCF8C6' },
-  botBubble: { alignSelf: 'flex-start', backgroundColor: '#F1F1F1' },
+  userBubble: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#DCF8C6',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  botBubble: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F1F1',
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 18,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 1,
+  },
   messageText: { fontSize: 16, lineHeight: 22 },
   userText: { color: '#000' },
   botText: { color: '#333' },
-
-  // Input
+  typingDot: {
+    fontSize: 8, // or 8 for extra tiny
+    color: '#424242ff',
+    lineHeight: 18,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -305,5 +385,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
     marginRight: 8,
+  },
+  greetingContainer: {
+    alignItems: 'flex-start',
+    width: '41%',
+    alignSelf: 'center',
+    marginTop: -120,
+    marginBottom: 80,
+  },
+  greetingText: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#222',
+  },
+  dateText: { fontSize: 15, color: '#777', marginTop: 4 },
+  caloriesTodayText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 80,
+    marginBottom: -50,
+  },
+  separatorLine: {
+    width: '75%',
+    height: 1,
+    backgroundColor: '#ddd',
+    marginTop: 70,
+    marginBottom: -70,
+    alignSelf: 'center',
   },
 });
