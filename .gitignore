@@ -1,2 +1,3 @@
+# Ignore secret environment files
+.env
 backend_myCalorieBuddy/.env
-.env 
