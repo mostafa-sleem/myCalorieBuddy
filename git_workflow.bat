@@ -62,7 +62,7 @@ if /i "%mainYN%"=="y" (
 echo.
 
 :: Create new branch
-set /p newYN=Create new branch? (y/n): 
+set /p newYN=Create new branch? (y/n) 
 if /i "%newYN%"=="y" (
     echo.
     set /p newBranch=Enter new branch name: 
