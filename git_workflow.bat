@@ -16,7 +16,8 @@ echo.
 :: --- Commit ---
 set /p commitMsg=Commit message: 
 if "!commitMsg!"=="" set "commitMsg=update"
-git add .
+git add . ":!env!" >nul 2>&1
+git reset HEAD .env >nul 2>&1
 git commit -m "!commitMsg!"
 echo.
 
@@ -47,7 +48,7 @@ if errorlevel 2 (
       echo ^>^> ⚠  Tag push failed. Leaving window open.
       goto end
     )
-    echo ✅ Tag "!tagName!" created and pushed!
+    echo Tag "!tagName!" created and pushed!
   )
 )
 echo.
@@ -63,7 +64,7 @@ if errorlevel 2 (
   git merge !branch!
   git push origin main
   git checkout !branch!
-  echo ✅ Main branch updated.
+  echo Main branch updated.
 )
 echo.
 
@@ -79,14 +80,14 @@ if errorlevel 2 (
   ) else (
     git checkout -b "!newBranch!"
     git push -u origin "!newBranch!"
-    echo ✅ Created and pushed new branch "!newBranch!".
+    echo Created and pushed new branch "!newBranch!".
   )
 )
 echo.
 
 :end
 echo =====================================================
-echo ✅  All done! Press any key to close.
+echo  All done! Press any key to close.
 echo =====================================================
 pause >nul
 endlocal
