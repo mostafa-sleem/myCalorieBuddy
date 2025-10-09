@@ -25,7 +25,7 @@ echo.
 
 :: Tag section
 echo.
-set /p tagYN=Tag this version? (y/n): 
+set /p tagYN=Tag this version? (y/n) 
 if /i "%tagYN%"=="y" (
     echo.
     set /p tagName=Enter tag name (e.g. v1.3.2): 
