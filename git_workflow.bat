@@ -51,7 +51,7 @@ if /i "%tagYN%"=="y" (
     if "%tagName%"=="" (
         echo Tag name cannot be empty. Skipping tagging.
     ) else (
-        set /p tagMsg=Enter tag message 
+        set /p tagMsg=Enter tag message: 
         echo Creating tag "%tagName%"...
         git tag -a "%tagName%" -m "%tagMsg%"
         git push origin "%tagName%"
