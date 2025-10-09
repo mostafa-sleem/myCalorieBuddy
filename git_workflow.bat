@@ -30,7 +30,7 @@ choice /M "Tag this version?" /C YN
 if errorlevel 2 (
   echo Skipping tagging.
 ) else (
-  set /p tagName=Enter tag name (e.g. v1.3.2): 
+  set /p tagName=Enter tag name 
   :: Trim surrounding quotes/spaces if any
   for /f "delims=" %%A in ("!tagName!") do set "tagName=%%~A"
   if "!tagName!"=="" (
