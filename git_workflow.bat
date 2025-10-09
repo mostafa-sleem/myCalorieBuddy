@@ -28,17 +28,17 @@ echo.
 set /p tagYN=Tag this version? (y/n) 
 if /i "%tagYN%"=="y" (
     echo.
-    set /p tagName=Enter tag name (e.g. v1.3.2): 
+    set /p tagName=Enter tag name 
     if "%tagName%"=="" (
-        echo ⚠️  Tag name cannot be empty. Skipping tagging.
+        echo  Tag name cannot be empty. Skipping tagging.
     ) else (
         echo Creating tag "%tagName%" ...
         git tag -a "%tagName%" -m "Version %tagName%"
         git push origin "%tagName%"
         if errorlevel 1 (
-            echo ⚠️  Tag push failed.
+            echo  Tag push failed.
         ) else (
-            echo ✅ Tag "%tagName%" created and pushed!
+            echo Tag "%tagName%" created and pushed!
         )
     )
 ) else (
@@ -47,7 +47,7 @@ if /i "%tagYN%"=="y" (
 echo.
 
 :: Push to main branch
-set /p mainYN=Push to main? (y/n): 
+set /p mainYN=Push to main? (y/n) 
 if /i "%mainYN%"=="y" (
     echo.
     echo Switching to main branch...
@@ -55,7 +55,7 @@ if /i "%mainYN%"=="y" (
     git merge %branch%
     git push origin main
     git checkout %branch%
-    echo ✅ Main branch updated.
+    echo Main branch updated.
 ) else (
     echo Skipping push to main.
 )
@@ -65,13 +65,13 @@ echo.
 set /p newYN=Create new branch? (y/n) 
 if /i "%newYN%"=="y" (
     echo.
-    set /p newBranch=Enter new branch name: 
+    set /p newBranch=Enter new branch name
     if "%newBranch%"=="" (
-        echo ⚠️  No branch name entered. Skipping.
+        echo  No branch name entered. Skipping.
     ) else (
         git checkout -b "%newBranch%"
         git push -u origin "%newBranch%"
-        echo ✅ Created and pushed new branch "%newBranch%".
+        echo Created and pushed new branch "%newBranch%".
     )
 ) else (
     echo Skipping new branch creation.
@@ -79,7 +79,7 @@ if /i "%newYN%"=="y" (
 echo.
 
 echo =====================================================
-echo ✅  All done! Press any key to close.
+echo  All done! Press any key to close.
 echo =====================================================
 pause >nul
 exit /b
