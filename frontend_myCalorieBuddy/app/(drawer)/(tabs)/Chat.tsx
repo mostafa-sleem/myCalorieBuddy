@@ -272,7 +272,7 @@ export default function ChatScreen() {
             style={{
               flex: 1,
               paddingHorizontal: 10,
-              backgroundColor: '#c6d1dfb4',
+              backgroundColor: '#dededeb4',
               borderTopLeftRadius: 25,
               borderTopRightRadius: 25,
               marginTop: -20,
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
   },
   greetingContainer: {
     alignItems: 'flex-start',
-    width: '41%',
+    width: '42%',
     alignSelf: 'center',
     marginTop: -120,
     marginBottom: 80,
