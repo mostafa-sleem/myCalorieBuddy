@@ -18,6 +18,7 @@ set /p commitMsg=Commit message:
 if "!commitMsg!"=="" set "commitMsg=update"
 git add . ":!env!" >nul 2>&1
 git reset HEAD .env >nul 2>&1
+git reset HEAD backend_myCalorieBuddy/.env >nul 2>&1
 git commit -m "!commitMsg!"
 echo.
 
