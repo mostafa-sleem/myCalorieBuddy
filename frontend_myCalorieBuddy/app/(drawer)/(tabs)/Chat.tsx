@@ -126,81 +126,52 @@ export default function ChatScreen() {
     setIsTyping(true);
 
     try {
-      const response = await fetch(
-        'https://ionogenic-micheal-debonairly.ngrok-free.dev/chat',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: input }),
-        }
-      );
+      const response = await fetch('https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input }),
+      });
 
       const { reply, data } = await response.json();
       console.log('🧠 Backend data:', data);
-
-      // Stop typing early if nothing arrives
       setIsTyping(false);
 
-      // Handle both data formats
-      const parsed =
-        data?.food || data?.data?.food
-          ? data?.food
-            ? data
-            : data?.data
-          : null;
-
       // ✅ If food detected
-      if (parsed && parsed.food) {
+      if (data && data.food) {
         const entry: FoodEntry = {
           id: `${Date.now()}`,
-          food: String(parsed.food),
+          food: String(data.food),
           quantity:
-            typeof parsed.quantity === 'number' ? parsed.quantity : undefined,
-          unit: parsed.unit || undefined,
+            typeof data.quantity === 'number' ? data.quantity : undefined,
+          unit: data.unit || undefined,
           calories:
-            typeof parsed.calories === 'number' ? parsed.calories : undefined,
+            typeof data.calories === 'number' ? data.calories : undefined,
           ts: new Date().toISOString(),
         };
+
         await appendFood(entry);
         console.log('✅ Saved food entry:', entry);
 
         setConsumed((prev) => prev + (entry.calories ?? 0));
 
-        const details = [
-          entry.quantity ? `${entry.quantity}` : '',
-          entry.unit ? entry.unit : '',
-        ]
+        const details = [entry.quantity ? `${entry.quantity}` : '', entry.unit ? entry.unit : '']
           .filter(Boolean)
           .join(' ');
-
-        const friendlyMessages = [
-          `Yum! ${entry.food}s are always a nice choice 😋`,
-          `Nice! ${entry.food}s keep you energized 🍎`,
-          `That ${entry.food} sounds delicious 😍`,
-          `Healthy choice — ${entry.food}s are great for you! 🥰`,
-        ];
-        const randomMessage =
-          friendlyMessages[Math.floor(Math.random() * friendlyMessages.length)];
 
         setMessages((prev) => [
           ...prev,
           {
             from: 'bot',
-            text: `✅ Logged "${entry.food}"${
-              details ? ` (${details})` : ''
-            } — ${entry.calories ?? 'unknown'} kcal`,
+            text: `✅ Logged "${entry.food}"${details ? ` (${details})` : ''} — ${
+              entry.calories ?? 'unknown'
+            } kcal`,
           },
-          //{ from: 'bot', text: randomMessage },//
         ]);
-
-        return; // stop after logging
+        return;
       }
 
       // 🧠 Normal reply if no food found
-      setMessages((prev) => [
-        ...prev,
-        { from: 'bot', text: reply || 'No response from server 😅' },
-      ]);
+      setMessages((prev) => [...prev, { from: 'bot', text: reply || 'No response from server 😅' }]);
     } catch (error) {
       console.error('❌ Chat fetch error:', error);
       setIsTyping(false);
@@ -293,9 +264,7 @@ export default function ChatScreen() {
                     msg.from === 'user' ? styles.userText : styles.botText,
                   ]}
                 >
-                  {msg.from === 'user'
-                    ? `You: ${msg.text}`
-                    : `Buddy: ${msg.text}`}
+                  {msg.from === 'user' ? `You: ${msg.text}` : `Buddy: ${msg.text}`}
                 </Text>
               </View>
             ))}
@@ -303,8 +272,12 @@ export default function ChatScreen() {
             {isTyping && (
               <View style={[styles.botBubble, { flexDirection: 'row' }]}>
                 <Animated.Text style={[styles.typingDot, { opacity: typingAnim }]}>●</Animated.Text>
-                <Animated.Text style={[styles.typingDot, { opacity: typingAnim2, marginLeft: 3 }]}>●</Animated.Text>
-                <Animated.Text style={[styles.typingDot, { opacity: typingAnim3, marginLeft: 3 }]}>●</Animated.Text>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim2, marginLeft: 3 }]}>
+                  ●
+                </Animated.Text>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim3, marginLeft: 3 }]}>
+                  ●
+                </Animated.Text>
               </View>
             )}
           </ScrollView>
@@ -375,13 +348,13 @@ const styles = StyleSheet.create({
   },
   greetingContainer: {
     alignItems: 'flex-start',
-    width: '42%',
+    width: '47%',
     alignSelf: 'center',
     marginTop: -120,
     marginBottom: 80,
   },
   greetingText: { fontSize: 26, fontWeight: '700', color: '#222' },
-  dateText: { fontSize: 15, color: '#777', marginTop: 4 },
+  dateText: { fontSize: 15, color: '#777', marginTop: 4, alignSelf: 'center' },
   caloriesTodayText: {
     fontSize: 18,
     fontWeight: '600',

@@ -1,4 +1,4 @@
-// 🧠 myCalorieBuddy — Server v8 (MVP 1.4 Memory Edition)
+// 🧠 myCalorieBuddy — Server v9 (MVP 1.4 Smart Context Edition)
 
 import express from "express";
 import cors from "cors";
@@ -21,9 +21,9 @@ const timer = () => {
 };
 
 /* -------------------------------------------------------------
-   🧠 Smarter intent detection
+   🧠 Smarter intent detection with continuation
 ------------------------------------------------------------- */
-function wantsLogging(message) {
+function wantsLogging(message, lastIntent = "none") {
   const lower = message.toLowerCase();
   const verbs = [
     "ate","had","got","ordered","cooked","made","grabbed","prepared",
@@ -36,9 +36,20 @@ function wantsLogging(message) {
     "fish","burger","milk","soup","meat","tea","juice","cheese","chocolate",
     "cake","cookie","steak","fries","vegetable","fruit","combo","meal"
   ];
+
   const hasVerb = verbs.some(v => lower.includes(v));
   const hasFood = foods.some(f => lower.includes(f));
-  return hasVerb && hasFood;
+
+  // ✅ Case 1: normal logging (verb + food)
+  if (hasVerb && hasFood) return true;
+
+  // ✅ Case 2: continuation (previous intent was logging)
+  if (!hasVerb && hasFood && lastIntent === "log") return true;
+
+  // ✅ Case 3: explicit “log it”
+  if (lower.includes("log it")) return true;
+
+  return false;
 }
 
 /* -------------------------------------------------------------
@@ -130,13 +141,14 @@ async function extractFood(userInput) {
 }
 
 /* -------------------------------------------------------------
-   🧠 Simple in-memory chat history (per session)
+   🧠 In-memory chat history with extended memory
 ------------------------------------------------------------- */
 let history = [];
-const MAX_HISTORY = 10;
+let lastIntent = "none";
+const MAX_HISTORY = 25;
 
 /* -------------------------------------------------------------
-   💬 Main chat route with memory
+   💬 Main chat route with context & smart intent continuation
 ------------------------------------------------------------- */
 app.post("/chat", async (req, res) => {
   const user = String(req.body.message ?? "").trim();
@@ -148,7 +160,8 @@ app.post("/chat", async (req, res) => {
     history.push({ role: "user", content: user });
     if (history.length > MAX_HISTORY) history.shift();
 
-    let loggingIntent = wantsLogging(user);
+    // Detect if user wants to log something (with context)
+    let loggingIntent = wantsLogging(user, lastIntent);
 
     // Fallback: user says “log it” after a food message
     if (!loggingIntent && user.toLowerCase().includes("log it")) {
@@ -187,6 +200,10 @@ app.post("/chat", async (req, res) => {
     history.push({ role: "assistant", content: reply });
     if (history.length > MAX_HISTORY) history.shift();
 
+    // Update lastIntent for context continuation
+    if (loggingIntent) lastIntent = "log";
+    else lastIntent = "none";
+
     res.json({ reply, data });
   } catch (err) {
     console.error("🔥 Chat route error:", err);
@@ -203,5 +220,5 @@ app.post("/chat", async (req, res) => {
    🚀 Launch server
 ------------------------------------------------------------- */
 app.listen(3000, () =>
-  console.log("🚀 Buddy Server v8 (MVP 1.4 Memory) running on http://localhost:3000")
+  console.log("🚀 Buddy Server v9 (MVP 1.4 Smart Context) running on http://localhost:3000")
 );
