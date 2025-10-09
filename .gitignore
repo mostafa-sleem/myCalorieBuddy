@@ -1,3 +1,8 @@
-# Ignore secret environment files
+# Node modules and build
+node_modules/
+build/
+dist/
+
+# Environment files
 .env
 backend_myCalorieBuddy/.env
