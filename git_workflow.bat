@@ -1,55 +1,66 @@
 @echo off
-title Git Workflow Wizard
-echo.
-echo === GIT WORKFLOW WIZARD ===
+title MyCalorieBuddy Git Workflow Script
+color 0A
+echo =====================================================
+echo             MyCalorieBuddy Git Workflow Script
+echo =====================================================
 echo.
 
-rem --- Step 1: Add and commit changes ---
-set /p commitMsg=Enter commit message: 
+:: Get current branch
+for /f "tokens=*" %%b in ('git rev-parse --abbrev-ref HEAD') do set "branch=%%b"
+echo Current branch: %branch%
+echo.
+
+:: Commit changes
+set /p commitMsg=Commit message: 
 if "%commitMsg%"=="" set commitMsg=update
 git add .
 git commit -m "%commitMsg%"
-
-rem --- Step 2: Push to current branch ---
 echo.
-set /p pushYN=Push changes to current branch? (y/n): 
-if /i "%pushYN%"=="y" (
-    git push
-)
 
-rem --- Step 3: Tag current version ---
+:: Push to current branch
+echo Pushing to %branch% ...
+git push origin %branch%
 echo.
-set /p tagYN=Tag current version? (y/n): 
-if /i "%tagYN%"=="y" (
+
+:: Tagging
+setlocal enabledelayedexpansion
+set /p tagYN=Tag this version? (y/n): 
+if /i "!tagYN!"=="y" (
     set /p tagName=Enter tag name (e.g. v1.3.2): 
-    git tag -a "%tagName%" -m "Version %tagName%"
-    git push origin "%tagName%"
-    echo Tag "%tagName%" created and pushed!
-    echo.
+    if not "!tagName!"=="" (
+        git tag -a "!tagName!" -m "Version !tagName!"
+        git push origin "!tagName!"
+        echo ✅ Tag "!tagName!" created and pushed!
+    ) else (
+        echo ⚠️ Tag name cannot be empty. Skipping tagging.
+    )
 )
+endlocal
+echo.
 
-rem --- Step 4: Push to main branch ---
-set /p mainYN=Push to main as well? (y/n): 
+:: Push to main
+set /p mainYN=Push to main? (y/n): 
 if /i "%mainYN%"=="y" (
     git checkout main
-    git merge -
+    git merge %branch%
     git push origin main
-    git checkout -
+    git checkout %branch%
 )
-
-rem --- Step 5: Create new branch ---
 echo.
+
+:: Create new branch
 set /p newYN=Create new branch? (y/n): 
 if /i "%newYN%"=="y" (
     set /p newBranch=Enter new branch name: 
-    if "%newBranch%"=="" (
-        echo No branch name entered, skipping.
-    ) else (
+    if not "%newBranch%"=="" (
         git checkout -b "%newBranch%"
         git push -u origin "%newBranch%"
+    ) else (
+        echo ⚠️ No branch name entered. Skipping.
     )
 )
-
 echo.
-echo ✅ All done!
+
+echo ✅ Done!
 pause
