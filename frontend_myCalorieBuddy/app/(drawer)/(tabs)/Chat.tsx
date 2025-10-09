@@ -116,11 +116,14 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
+  // ✅ FINAL duplicate-proof sendMessage
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const newMessages = [...messages, { from: 'user', text: input }];
-    setMessages(newMessages);
+    const userMessage = input.trim();
+
+    // show user message once
+    setMessages(prev => [...prev, { from: 'user', text: userMessage }]);
     setInput('');
     Keyboard.dismiss();
     setIsTyping(true);
@@ -129,53 +132,53 @@ export default function ChatScreen() {
       const response = await fetch('https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: userMessage }),
       });
 
       const { reply, data } = await response.json();
-      console.log('🧠 Backend data:', data);
       setIsTyping(false);
+      console.log('🧠 Backend data:', data);
 
-      // ✅ If food detected
-      if (data && data.food) {
+      // 👉 silently update storage & calories (supports single or multi)
+      let totalAdded = 0;
+
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (!item || !item.food) continue;
+          const entry: FoodEntry = {
+            id: `${Date.now()}-${item.food}`,
+            food: String(item.food),
+            quantity: typeof item.quantity === 'number' ? item.quantity : undefined,
+            unit: item.unit || undefined,
+            calories: typeof item.calories === 'number' ? item.calories : undefined,
+            ts: new Date().toISOString(),
+          };
+          await appendFood(entry);
+          totalAdded += entry.calories ?? 0;
+        }
+      } else if (data && data.food) {
         const entry: FoodEntry = {
           id: `${Date.now()}`,
           food: String(data.food),
-          quantity:
-            typeof data.quantity === 'number' ? data.quantity : undefined,
+          quantity: typeof data.quantity === 'number' ? data.quantity : undefined,
           unit: data.unit || undefined,
-          calories:
-            typeof data.calories === 'number' ? data.calories : undefined,
+          calories: typeof data.calories === 'number' ? data.calories : undefined,
           ts: new Date().toISOString(),
         };
-
         await appendFood(entry);
-        console.log('✅ Saved food entry:', entry);
-
-        setConsumed((prev) => prev + (entry.calories ?? 0));
-
-        const details = [entry.quantity ? `${entry.quantity}` : '', entry.unit ? entry.unit : '']
-          .filter(Boolean)
-          .join(' ');
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            from: 'bot',
-            text: `✅ Logged "${entry.food}"${details ? ` (${details})` : ''} — ${
-              entry.calories ?? 'unknown'
-            } kcal`,
-          },
-        ]);
-        return;
+        totalAdded += entry.calories ?? 0;
       }
 
-      // 🧠 Normal reply if no food found
-      setMessages((prev) => [...prev, { from: 'bot', text: reply || 'No response from server 😅' }]);
+      if (totalAdded > 0) {
+        setConsumed(prev => prev + totalAdded);
+      }
+
+      // 👉 show exactly ONE bot message: backend's reply (already includes ✅ Logged + friendly line)
+      setMessages(prev => [...prev, { from: 'bot', text: reply || 'No response from server 😅' }]);
     } catch (error) {
       console.error('❌ Chat fetch error:', error);
       setIsTyping(false);
-      setMessages((prev) => [
+      setMessages(prev => [
         ...prev,
         { from: 'bot', text: '❌ Connection error. Please try again later.' },
       ]);
