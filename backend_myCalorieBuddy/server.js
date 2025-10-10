@@ -1,4 +1,4 @@
-// 🧠 MyCalorieBuddy — Server v10.4 (Add + Remove + Stable Totals)
+// 🧠 MyCalorieBuddy — Server v10.5 (Add + Remove + Reset All)
 
 import express from "express";
 import cors from "cors";
@@ -39,25 +39,30 @@ function wantsLogging(message, lastIntent = "none") {
 
 function wantsRemoval(message) {
   const lower = message.toLowerCase();
-  const keywords = ["remove", "delete", "undo", "erase", "cancel"];
+  const keywords = ["remove","delete","undo","erase","cancel",
+    "remove all","clear all","delete all","start fresh","reset day","reset log","reset today"];
   return keywords.some(k => lower.includes(k));
+}
+
+// ✅ NEW: robust detector for “reset all / start fresh”
+function wantsFullReset(message) {
+  const lower = message.toLowerCase();
+  const patterns = [
+    /(?:remove|delete|clear)\s+(?:all|everything)/,
+    /start\s*fresh/,
+    /reset\s*(?:day|today|log)/,
+    /wipe\s*(?:all|everything)/,
+    /clear\s*(?:today|my log|the log)/
+  ];
+  return patterns.some(p => (p instanceof RegExp ? p.test(lower) : lower.includes(p)));
 }
 
 /* -------------------------------------------------------------
    🍎 Local Calorie DB
 ------------------------------------------------------------- */
 const foodDB = {
-  apple: 72,
-  banana: 89,
-  orange: 62,
-  egg: 68,
-  rice: 206,
-  chicken: 165,
-  yogurt: 59,
-  salad: 120,
-  pasta: 220,
-  pizza: 285,
-  bread: 80,
+  apple: 72, banana: 89, orange: 62, egg: 68, rice: 206, chicken: 165,
+  yogurt: 59, salad: 120, pasta: 220, pizza: 285, bread: 80,
 };
 
 /* -------------------------------------------------------------
@@ -138,7 +143,7 @@ let lastResetDate = new Date().toDateString();
 const MAX_HISTORY = 25;
 
 /* -------------------------------------------------------------
-   🗓️ Daily Reset (simple memory reset)
+   🗓️ Daily Reset
 ------------------------------------------------------------- */
 function ensureDailyReset() {
   const today = new Date().toDateString();
@@ -156,17 +161,11 @@ function updateFoodLog(action, foodName, calories = 0) {
   if (action === "add") {
     foodLog.push({ food: foodName, calories });
   } else if (action === "remove") {
-    const index = foodLog.findIndex(
-      f => f.food.toLowerCase() === foodName.toLowerCase()
-    );
-    if (index !== -1) {
-      const removed = foodLog.splice(index, 1)[0];
-      return removed;
-    }
+    const index = foodLog.findIndex(f => f.food.toLowerCase() === foodName.toLowerCase());
+    if (index !== -1) return foodLog.splice(index, 1)[0];
   }
   return null;
 }
-
 function totalCalories() {
   return foodLog.reduce((sum, f) => sum + (f.calories || 0), 0);
 }
@@ -184,8 +183,9 @@ app.post("/chat", async (req, res) => {
     history.push({ role: "user", content: user });
     if (history.length > MAX_HISTORY) history.shift();
 
-    let loggingIntent = wantsLogging(user, lastIntent);
-    let removalIntent = wantsRemoval(user);
+    const loggingIntent = wantsLogging(user, lastIntent);
+    const removalIntent = wantsRemoval(user);
+    const resetIntent = wantsFullReset(user);
 
     // Step 1 – Buddy reply
     const replyRes = await client.chat.completions.create({
@@ -201,8 +201,17 @@ app.post("/chat", async (req, res) => {
 
     let data = { food: null };
 
+    // ✅ FULL RESET — early return (fast)
+    if (resetIntent) {
+      foodLog = [];
+      reply = "🧹 Removed all foods logged. Total is now 0 kcal. If you’re ready to eat again, I’m here to help! What are you thinking of having next?";
+      history.push({ role: "assistant", content: reply });
+      lastIntent = "reset";
+      return res.json({ reply, data: { action: "reset" }, totalCalories: 0 });
+    }
+
     /* ---------------------------------------------------------
-       🧩 Handle REMOVE
+       🧩 REMOVE one item
     --------------------------------------------------------- */
     if (removalIntent) {
       const parsed = await extractFood(user);
@@ -212,32 +221,25 @@ app.post("/chat", async (req, res) => {
         reply = "Hmm, which food should I remove? 🤔";
       } else {
         const removed = updateFoodLog("remove", foodName);
-        if (removed) {
-          const newTotal = totalCalories();
-          reply = `🧹 Removed "${foodName}" (${removed.calories} kcal). Total is now ${newTotal} kcal.`;
-        } else {
-          reply = `I couldn’t find "${foodName}" in today’s log 🤷‍♂️`;
-        }
+        reply = removed
+          ? `🧹 Removed "${foodName}" (${removed.calories} kcal). Total is now ${totalCalories()} kcal.`
+          : `I couldn’t find "${foodName}" in today’s log 🤷‍♂️`;
       }
     }
 
     /* ---------------------------------------------------------
-       🧩 Handle ADD
+       🧩 ADD (includes multi-food)
     --------------------------------------------------------- */
     if (loggingIntent && !removalIntent) {
       const userOnly = user;
 
       const comboRegex = /\b(?:and|with|plus)\s+([\w\s\d]+)/gi;
       const foodsFound = [];
-      let match;
-      while ((match = comboRegex.exec(userOnly)) !== null) {
-        foodsFound.push(match[1].trim());
-      }
+      let m; while ((m = comboRegex.exec(userOnly)) !== null) foodsFound.push(m[1].trim());
       if (!foodsFound.includes(userOnly.trim())) foodsFound.unshift(userOnly.trim());
 
       const results = [];
       const seen = new Set();
-
       for (const fragment of foodsFound) {
         const parsed = await extractFood(fragment);
         if (parsed.food && parsed.calories) {
@@ -250,13 +252,12 @@ app.post("/chat", async (req, res) => {
 
       if (results.length === 1) {
         data = results[0];
-        updateFoodLog("add", data.food, data.calories); // ✅ keeps totals consistent
-        const kcalText = `(${data.calories} kcal)`;
-        reply = `✅ Logged "${data.food}" ${kcalText}\n${reply}`;
+        updateFoodLog("add", data.food, data.calories); // keep running total for ring
+        reply = `✅ Logged "${data.food}" (${data.calories} kcal)\n${reply}`;
       } else if (results.length > 1) {
         data = results;
-        const totalKcal = results.reduce((sum, r) => sum + (r.calories || 0), 0);
         for (const r of results) updateFoodLog("add", r.food, r.calories);
+        const totalKcal = results.reduce((s, r) => s + (r.calories || 0), 0);
         const foods = results.map(r => `${r.food} (${r.calories} kcal)`).join(", ");
         reply = `✅ Logged ${results.length} foods: ${foods} — ${totalKcal} kcal\n\n${reply}`;
       } else {
@@ -268,16 +269,14 @@ app.post("/chat", async (req, res) => {
     if (history.length > MAX_HISTORY) history.shift();
     lastIntent = loggingIntent ? "log" : removalIntent ? "remove" : "none";
 
-    // 🧹 Clean duplicate lines
-    const lines = reply.split("\n");
+    // 🧹 dedupe lines
+    const dedup = [];
     const seenLines = new Set();
-    reply = lines.filter(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return true;
-      if (seenLines.has(trimmed)) return false;
-      seenLines.add(trimmed);
-      return true;
-    }).join("\n");
+    for (const line of reply.split("\n")) {
+      const t = line.trim();
+      if (!t || !seenLines.has(t)) { dedup.push(line); seenLines.add(t); }
+    }
+    reply = dedup.join("\n");
 
     res.json({ reply, data, totalCalories: totalCalories() });
   } catch (err) {
@@ -296,5 +295,5 @@ app.post("/chat", async (req, res) => {
    🚀 Launch Server
 ------------------------------------------------------------- */
 app.listen(3000, () =>
-  console.log("🚀 Buddy Server v10.4 (Add + Remove + Stable Totals) running on http://localhost:3000")
+  console.log("🚀 Buddy Server v10.5 (Add + Remove + Reset All) running on http://localhost:3000")
 );

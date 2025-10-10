@@ -13,7 +13,8 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { appendFood, getFoods, removeFood, FoodEntry } from '../../../lib/storage';
+import { appendFood, getFoods, removeFood, clearAllFoods, FoodEntry } from '../../../lib/storage';
+
 import Svg, { Circle } from 'react-native-svg';
 
 // Greeting helper
@@ -128,6 +129,14 @@ export default function ChatScreen() {
       setIsTyping(false);
       console.log('🧠 Backend data:', data, totalCalories);
 
+
+      // 💨 Handle full reset (e.g. "remove all foods", "start fresh")
+      if (data && data.action === "reset") {
+        await clearAllFoods(); // helper in your storage file
+        setConsumed(0);        // reset the ring
+      }
+
+
       // 🧩 Handle ADD
       if (data && data.food && !userMessage.toLowerCase().includes('remove') && !userMessage.toLowerCase().includes('delete')) {
         const entry: FoodEntry = {
@@ -143,7 +152,7 @@ export default function ChatScreen() {
         setConsumed(prev => prev + (entry.calories ?? 0));
       }
 
-      
+
       // 🧹 Handle REMOVE or any calorie update
       if (userMessage.toLowerCase().includes('remove') || userMessage.toLowerCase().includes('delete') || userMessage.toLowerCase().includes('undo')) {
         if (data && data.food) {

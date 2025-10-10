@@ -39,3 +39,16 @@ export async function clearFoodLog() {
     console.error('❌ clearFoodLog error:', err);
   }
 }
+
+
+
+
+
+export const clearAllFoods = async () => {
+  try {
+    await AsyncStorage.removeItem("foods");
+  } catch (e) {
+    console.log("⚠️ Could not clear foods", e);
+  }
+};
+
