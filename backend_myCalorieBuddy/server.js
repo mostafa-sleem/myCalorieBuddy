@@ -1,4 +1,4 @@
-// 🧠 MyCalorieBuddy — Server v10.2 (Precision + Context Guard)
+// 🧠 MyCalorieBuddy — Server v10.4 (Add + Remove + Stable Totals)
 
 import express from "express";
 import cors from "cors";
@@ -21,54 +21,43 @@ const timer = () => {
 };
 
 /* -------------------------------------------------------------
-   🧠 Intent Detection with Continuation
+   🧠 Intent Detection
 ------------------------------------------------------------- */
 function wantsLogging(message, lastIntent = "none") {
   const lower = message.toLowerCase();
   const verbs = [
-    "ate", "had", "got", "ordered", "cooked", "made", "grabbed", "prepared",
-    "took", "drank", "consumed", "finished", "snacked on", "devoured",
-    "enjoyed", "tried", "bought", "log", "logged"
+    "ate","had","got","ordered","cooked","made","grabbed","prepared",
+    "took","drank","consumed","finished","snacked on","devoured",
+    "enjoyed","tried","bought","log","logged"
   ];
-  /*const foods = [
-    "apple", "banana", "orange", "egg", "falafel", "rice", "chicken", "bread",
-    "coffee", "yogurt", "salad", "pasta", "sandwich", "potato", "pizza", "tomato",
-    "fish", "burger", "milk", "soup", "meat", "tea", "juice", "cheese", "chocolate",
-    "cake", "cookie", "steak", "fries", "vegetable", "fruit", "combo", "meal", "almond", "nuts"
-  ];*/
-
   const hasVerb = verbs.some(v => lower.includes(v));
-  //const hasFood = foods.some(f => lower.includes(f));
-
   if (hasVerb) return true;
   if (!hasVerb && lastIntent === "log") return true;
   if (lower.includes("log it")) return true;
   return false;
 }
 
+function wantsRemoval(message) {
+  const lower = message.toLowerCase();
+  const keywords = ["remove", "delete", "undo", "erase", "cancel"];
+  return keywords.some(k => lower.includes(k));
+}
+
 /* -------------------------------------------------------------
    🍎 Local Calorie DB
 ------------------------------------------------------------- */
 const foodDB = {
-  /*apple: 72,
+  apple: 72,
   banana: 89,
   orange: 62,
   egg: 68,
-  "falafel sandwich": 350,
   rice: 206,
   chicken: 165,
-  bread: 80,
-  coffee: 2,
   yogurt: 59,
   salad: 120,
   pasta: 220,
   pizza: 285,
-  potato: 161,
-  tomato: 22,
-  burger: 500,
-  almonds: 7,
-  almond: 7,
-  "big tasty": 1300,*/
+  bread: 80,
 };
 
 /* -------------------------------------------------------------
@@ -101,7 +90,7 @@ Rules:
 `;
 
 /* -------------------------------------------------------------
-   🍎 Extract Food Info (deterministic)
+   🍎 Extract Food Info
 ------------------------------------------------------------- */
 async function extractFood(userInput) {
   const endTimer = timer();
@@ -116,22 +105,18 @@ async function extractFood(userInput) {
       max_tokens: 5000
     });
 
-    // Try to capture JSON inside text safely
     const text = r.choices[0].message.content || "";
     const match = text.match(/{[\s\S]*}/);
     const obj = match ? JSON.parse(match[0]) : { food: null };
 
-    // Fill missing calories from DB
     if (obj.food && !obj.calories) {
       const normalized = obj.food.toLowerCase().trim();
       obj.calories = foodDB[normalized] ?? null;
     }
 
-    // Defaults
     obj.quantity = obj.quantity ?? 1;
     obj.unit = obj.unit || "piece";
 
-    // Safety clamps
     if (obj.quantity > 10) obj.quantity = 10;
     if (obj.calories > 1000) obj.calories = 1000;
 
@@ -143,18 +128,54 @@ async function extractFood(userInput) {
   }
 }
 
-
 /* -------------------------------------------------------------
    🧠 Memory
 ------------------------------------------------------------- */
 let history = [];
 let lastIntent = "none";
+let foodLog = [];
+let lastResetDate = new Date().toDateString();
 const MAX_HISTORY = 25;
 
 /* -------------------------------------------------------------
-   💬 Chat Route — Precision + Context Guard
+   🗓️ Daily Reset (simple memory reset)
+------------------------------------------------------------- */
+function ensureDailyReset() {
+  const today = new Date().toDateString();
+  if (today !== lastResetDate) {
+    foodLog = [];
+    lastResetDate = today;
+    console.log("🧹 Daily reset — new day, fresh log!");
+  }
+}
+
+/* -------------------------------------------------------------
+   🧮 Food Log Helpers
+------------------------------------------------------------- */
+function updateFoodLog(action, foodName, calories = 0) {
+  if (action === "add") {
+    foodLog.push({ food: foodName, calories });
+  } else if (action === "remove") {
+    const index = foodLog.findIndex(
+      f => f.food.toLowerCase() === foodName.toLowerCase()
+    );
+    if (index !== -1) {
+      const removed = foodLog.splice(index, 1)[0];
+      return removed;
+    }
+  }
+  return null;
+}
+
+function totalCalories() {
+  return foodLog.reduce((sum, f) => sum + (f.calories || 0), 0);
+}
+
+/* -------------------------------------------------------------
+   💬 Chat Route
 ------------------------------------------------------------- */
 app.post("/chat", async (req, res) => {
+  ensureDailyReset();
   const user = String(req.body.message ?? "").trim();
   console.log("🟢 User:", user);
   const endTimer = timer();
@@ -164,7 +185,7 @@ app.post("/chat", async (req, res) => {
     if (history.length > MAX_HISTORY) history.shift();
 
     let loggingIntent = wantsLogging(user, lastIntent);
-    if (!loggingIntent && user.toLowerCase().includes("log it")) loggingIntent = true;
+    let removalIntent = wantsRemoval(user);
 
     // Step 1 – Buddy reply
     const replyRes = await client.chat.completions.create({
@@ -178,13 +199,34 @@ app.post("/chat", async (req, res) => {
     const usage = replyRes.usage || {};
     console.log(`💬 Buddy reply (${usage.total_tokens ?? "?"} tokens): ${reply}`);
 
-    // Step 2 – Structured parsing
     let data = { food: null };
 
-    if (loggingIntent) {
+    /* ---------------------------------------------------------
+       🧩 Handle REMOVE
+    --------------------------------------------------------- */
+    if (removalIntent) {
+      const parsed = await extractFood(user);
+      const foodName = parsed.food;
+
+      if (!foodName) {
+        reply = "Hmm, which food should I remove? 🤔";
+      } else {
+        const removed = updateFoodLog("remove", foodName);
+        if (removed) {
+          const newTotal = totalCalories();
+          reply = `🧹 Removed "${foodName}" (${removed.calories} kcal). Total is now ${newTotal} kcal.`;
+        } else {
+          reply = `I couldn’t find "${foodName}" in today’s log 🤷‍♂️`;
+        }
+      }
+    }
+
+    /* ---------------------------------------------------------
+       🧩 Handle ADD
+    --------------------------------------------------------- */
+    if (loggingIntent && !removalIntent) {
       const userOnly = user;
 
-      // 🧩 Detect multiple foods (split by and/with/plus)
       const comboRegex = /\b(?:and|with|plus)\s+([\w\s\d]+)/gi;
       const foodsFound = [];
       let match;
@@ -200,33 +242,21 @@ app.post("/chat", async (req, res) => {
         const parsed = await extractFood(fragment);
         if (parsed.food && parsed.calories) {
           const key = parsed.food.toLowerCase();
-
-          if (seen.has(key)) {
-            // 🧩 Already found this food once → average or keep the higher calorie
-            const existing = results.find(r => r.food.toLowerCase() === key);
-            if (existing) {
-              existing.calories = Math.round(
-                (existing.calories + parsed.calories) / 2
-              );
-              // optional: pick the higher value instead
-              // existing.calories = Math.max(existing.calories, parsed.calories);
-            }
-          } else {
-            seen.add(key);
-            results.push(parsed);
-          }
+          if (seen.has(key)) continue;
+          seen.add(key);
+          results.push(parsed);
         }
       }
 
-
       if (results.length === 1) {
         data = results[0];
+        updateFoodLog("add", data.food, data.calories); // ✅ keeps totals consistent
         const kcalText = `(${data.calories} kcal)`;
-        reply = `✅ Logged "${data.food}" (${data.calories} kcal)\n${reply}`;
-        console.log(`💬 Buddy friendly message: ${reply}`);
+        reply = `✅ Logged "${data.food}" ${kcalText}\n${reply}`;
       } else if (results.length > 1) {
         data = results;
         const totalKcal = results.reduce((sum, r) => sum + (r.calories || 0), 0);
+        for (const r of results) updateFoodLog("add", r.food, r.calories);
         const foods = results.map(r => `${r.food} (${r.calories} kcal)`).join(", ");
         reply = `✅ Logged ${results.length} foods: ${foods} — ${totalKcal} kcal\n\n${reply}`;
       } else {
@@ -236,28 +266,26 @@ app.post("/chat", async (req, res) => {
 
     history.push({ role: "assistant", content: reply });
     if (history.length > MAX_HISTORY) history.shift();
-    lastIntent = loggingIntent ? "log" : "none";
+    lastIntent = loggingIntent ? "log" : removalIntent ? "remove" : "none";
 
-
-
-    // 🧹 Temporary duplicate text cleaner
+    // 🧹 Clean duplicate lines
     const lines = reply.split("\n");
     const seenLines = new Set();
     reply = lines.filter(line => {
       const trimmed = line.trim();
-      if (!trimmed) return true; // keep empty lines
-      if (seenLines.has(trimmed)) return false; // remove duplicate lines
+      if (!trimmed) return true;
+      if (seenLines.has(trimmed)) return false;
       seenLines.add(trimmed);
       return true;
     }).join("\n");
 
-
-    res.json({ reply, data });
+    res.json({ reply, data, totalCalories: totalCalories() });
   } catch (err) {
     console.error("🔥 Chat route error:", err);
     res.status(500).json({
       reply: "Oops! Something went wrong 😅. Let’s try again in a sec.",
-      data: { food: null }
+      data: { food: null },
+      totalCalories: totalCalories()
     });
   }
 
@@ -268,5 +296,5 @@ app.post("/chat", async (req, res) => {
    🚀 Launch Server
 ------------------------------------------------------------- */
 app.listen(3000, () =>
-  console.log("🚀 Buddy Server v10.2 (Precision + Context Guard) running on http://localhost:3000")
+  console.log("🚀 Buddy Server v10.4 (Add + Remove + Stable Totals) running on http://localhost:3000")
 );

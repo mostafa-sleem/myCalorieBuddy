@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { appendFood, getFoods, FoodEntry } from '../../../lib/storage';
+import { appendFood, getFoods, removeFood, FoodEntry } from '../../../lib/storage';
 import Svg, { Circle } from 'react-native-svg';
 
 // Greeting helper
@@ -25,8 +25,6 @@ const getGreeting = () => {
 };
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const scrollViewRef = useRef<ScrollView>(null);
-
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([
@@ -39,8 +37,9 @@ export default function ChatScreen() {
   const [consumed, setConsumed] = useState(0);
   const [target] = useState(2200);
   const [isTyping, setIsTyping] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // Typing animation
+  // Typing animation setup
   const typingAnim = useRef(new Animated.Value(0)).current;
   const typingAnim2 = useRef(new Animated.Value(0)).current;
   const typingAnim3 = useRef(new Animated.Value(0)).current;
@@ -49,17 +48,8 @@ export default function ChatScreen() {
     const createLoop = (anim: Animated.Value, delay: number) => {
       return Animated.loop(
         Animated.sequence([
-          Animated.timing(anim, {
-            toValue: 1,
-            duration: 400,
-            useNativeDriver: true,
-            delay,
-          }),
-          Animated.timing(anim, {
-            toValue: 0.3,
-            duration: 400,
-            useNativeDriver: true,
-          }),
+          Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true, delay }),
+          Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
         ])
       );
     };
@@ -75,9 +65,7 @@ export default function ChatScreen() {
     day: 'numeric',
   });
 
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  // Circle setup
+  // Calorie ring setup
   const radius = 65;
   const strokeWidth = 8;
   const circumference = 2 * Math.PI * radius;
@@ -97,7 +85,7 @@ export default function ChatScreen() {
     outputRange: [circumference, 0],
   });
 
-  // Load saved calories
+  // Load saved foods
   useEffect(() => {
     const loadCalories = async () => {
       try {
@@ -118,11 +106,10 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  // ✅ FINAL duplicate-proof sendMessage
+  // ✅ Smarter sendMessage (supports add + remove)
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    // 🧍 Add user message immediately
     const newMessages = [...messages, { from: 'user', text: input }];
     setMessages(newMessages);
     const userMessage = input;
@@ -131,27 +118,24 @@ export default function ChatScreen() {
     setIsTyping(true);
 
     try {
-      // 🚀 Send to backend
       const response = await fetch('https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage }),
       });
 
-      const { reply, data } = await response.json();
-      console.log('🧠 Backend data:', data);
+      const { reply, data, totalCalories } = await response.json();
       setIsTyping(false);
+      console.log('🧠 Backend data:', data, totalCalories);
 
-      // 🧮 Update calorie data (no extra messages)
-      if (data && data.food) {
+      // 🧩 Handle ADD
+      if (data && data.food && !userMessage.toLowerCase().includes('remove') && !userMessage.toLowerCase().includes('delete')) {
         const entry: FoodEntry = {
           id: `${Date.now()}-${data.food}`,
           food: String(data.food),
-          quantity:
-            typeof data.quantity === 'number' ? data.quantity : undefined,
+          quantity: typeof data.quantity === 'number' ? data.quantity : undefined,
           unit: data.unit || undefined,
-          calories:
-            typeof data.calories === 'number' ? data.calories : undefined,
+          calories: typeof data.calories === 'number' ? data.calories : undefined,
           ts: new Date().toISOString(),
         };
 
@@ -159,14 +143,25 @@ export default function ChatScreen() {
         setConsumed(prev => prev + (entry.calories ?? 0));
       }
 
-      // 🧠 Prepare Buddy reply for typing
+      
+      // 🧹 Handle REMOVE or any calorie update
+      if (userMessage.toLowerCase().includes('remove') || userMessage.toLowerCase().includes('delete') || userMessage.toLowerCase().includes('undo')) {
+        if (data && data.food) {
+          await removeFood(data.food);
+        }
+      }
+
+      // ✅ Always update total if backend provides it
+      if (typeof totalCalories === 'number') {
+        setConsumed(totalCalories);
+      }
+
+
+      // ✨ Typing simulation for Buddy’s reply
       const finalReply = reply || 'No response from server 😅';
       let i = 0;
-
-      // Add empty bubble first
       setMessages(prev => [...prev, { from: 'bot', text: '' }]);
 
-      // ✨ Smart typing function with human rhythm
       const typeChar = () => {
         i++;
         setMessages(prev => {
@@ -179,20 +174,16 @@ export default function ChatScreen() {
         scrollViewRef?.current?.scrollToEnd({ animated: true });
 
         if (i < finalReply.length) {
-          // 🧩 Human realism:
-          // - Random speed variation
-          // - Small pause after punctuation or emoji
           const char = finalReply[i];
-          let delay = 8 + Math.random() * 10; // base random typing speed
-          if (/[,.!?]/.test(char)) delay += 150; // short pause at sentence end
-          if (/[😊😅😂😋🍎🍌🍕🍽️🥗]/.test(char)) delay += 100; // tiny emoji pause
+          let delay = 8 + Math.random() * 10;
+          if (/[,.!?]/.test(char)) delay += 150;
+          if (/[😊😅😂😋🍎🍌🍕🍽️🥗]/.test(char)) delay += 100;
           setTimeout(typeChar, delay);
         } else {
           setIsTyping(false);
         }
       };
 
-      // Start typing after a short “thinking” delay
       setTimeout(typeChar, 350 + Math.random() * 200);
     } catch (error) {
       console.error('❌ Chat fetch error:', error);
@@ -204,7 +195,6 @@ export default function ChatScreen() {
     }
   };
 
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.summaryContainer}>
@@ -215,22 +205,8 @@ export default function ChatScreen() {
 
         <View style={styles.circleWrapper}>
           <Svg height="150" width="150" style={styles.svg}>
-            <Circle
-              stroke="#E5E5E5"
-              fill="none"
-              cx="75"
-              cy="75"
-              r={radius}
-              strokeWidth={strokeWidth}
-            />
-            <Circle
-              stroke="none"
-              fill="#e5e5e56a"
-              cx="75"
-              cy="75"
-              r={radius - 15}
-              strokeWidth={1}
-            />
+            <Circle stroke="#E5E5E5" fill="none" cx="75" cy="75" r={radius} strokeWidth={strokeWidth} />
+            <Circle stroke="none" fill="#e5e5e56a" cx="75" cy="75" r={radius - 15} strokeWidth={1} />
             <AnimatedCircle
               stroke="#4FA3F7"
               fill="none"
@@ -287,7 +263,7 @@ export default function ChatScreen() {
                     msg.from === 'user' ? styles.userText : styles.botText,
                   ]}
                 >
-                  {msg.from === 'user' ? ` ${msg.text}` : ` ${msg.text}`}
+                  {msg.text}
                 </Text>
               </View>
             ))}
@@ -295,12 +271,8 @@ export default function ChatScreen() {
             {isTyping && (
               <View style={[styles.botBubble, { flexDirection: 'row' }]}>
                 <Animated.Text style={[styles.typingDot, { opacity: typingAnim }]}>●</Animated.Text>
-                <Animated.Text style={[styles.typingDot, { opacity: typingAnim2, marginLeft: 3 }]}>
-                  ●
-                </Animated.Text>
-                <Animated.Text style={[styles.typingDot, { opacity: typingAnim3, marginLeft: 3 }]}>
-                  ●
-                </Animated.Text>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim2, marginLeft: 3 }]}>●</Animated.Text>
+                <Animated.Text style={[styles.typingDot, { opacity: typingAnim3, marginLeft: 3 }]}>●</Animated.Text>
               </View>
             )}
           </ScrollView>
@@ -370,34 +342,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   greetingContainer: {
-    alignItems: 'center',      // ✅ centers horizontally
-    justifyContent: 'center',  // centers vertically if needed
-    width: '100%',             // take full width for true center alignment
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
     marginTop: -120,
     marginBottom: 80,
   },
-
-  greetingText: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#222',
-    textAlign: 'center',       // ✅ ensures text itself is centered
-  },
-
-  dateText: {
-    fontSize: 15,
-    color: '#777',
-    marginTop: 4,
-    textAlign: 'center',       // ✅ centers date too
-  },
-
+  greetingText: { fontSize: 26, fontWeight: '700', color: '#222', textAlign: 'center' },
+  dateText: { fontSize: 15, color: '#777', marginTop: 4, textAlign: 'center' },
   caloriesTodayText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
     marginTop: 80,
     marginBottom: -50,
-    textAlign: 'center',       // ✅ keeps it aligned with greeting
+    textAlign: 'center',
   },
   separatorLine: {
     width: '75%',
