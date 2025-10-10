@@ -222,7 +222,7 @@ app.post("/chat", async (req, res) => {
       if (results.length === 1) {
         data = results[0];
         const kcalText = `(${data.calories} kcal)`;
-        reply = `✅ Logged "${data.food}" ${kcalText}\n\n${reply}`;
+        reply = `✅ Logged "${data.food}" (${data.calories} kcal)\n${reply}`;
         console.log(`💬 Buddy friendly message: ${reply}`);
       } else if (results.length > 1) {
         data = results;

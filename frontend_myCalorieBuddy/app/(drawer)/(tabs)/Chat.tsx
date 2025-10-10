@@ -25,6 +25,8 @@ const getGreeting = () => {
 };
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const scrollViewRef = useRef<ScrollView>(null);
+
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState([
@@ -120,15 +122,16 @@ export default function ChatScreen() {
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const userMessage = input.trim();
-
-    // show user message once
-    setMessages(prev => [...prev, { from: 'user', text: userMessage }]);
+    // 🧍 Add user message immediately
+    const newMessages = [...messages, { from: 'user', text: input }];
+    setMessages(newMessages);
+    const userMessage = input;
     setInput('');
     Keyboard.dismiss();
     setIsTyping(true);
 
     try {
+      // 🚀 Send to backend
       const response = await fetch('https://ionogenic-micheal-debonairly.ngrok-free.dev/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,45 +139,61 @@ export default function ChatScreen() {
       });
 
       const { reply, data } = await response.json();
-      setIsTyping(false);
       console.log('🧠 Backend data:', data);
+      setIsTyping(false);
 
-      // 👉 silently update storage & calories (supports single or multi)
-      let totalAdded = 0;
-
-      if (Array.isArray(data)) {
-        for (const item of data) {
-          if (!item || !item.food) continue;
-          const entry: FoodEntry = {
-            id: `${Date.now()}-${item.food}`,
-            food: String(item.food),
-            quantity: typeof item.quantity === 'number' ? item.quantity : undefined,
-            unit: item.unit || undefined,
-            calories: typeof item.calories === 'number' ? item.calories : undefined,
-            ts: new Date().toISOString(),
-          };
-          await appendFood(entry);
-          totalAdded += entry.calories ?? 0;
-        }
-      } else if (data && data.food) {
+      // 🧮 Update calorie data (no extra messages)
+      if (data && data.food) {
         const entry: FoodEntry = {
-          id: `${Date.now()}`,
+          id: `${Date.now()}-${data.food}`,
           food: String(data.food),
-          quantity: typeof data.quantity === 'number' ? data.quantity : undefined,
+          quantity:
+            typeof data.quantity === 'number' ? data.quantity : undefined,
           unit: data.unit || undefined,
-          calories: typeof data.calories === 'number' ? data.calories : undefined,
+          calories:
+            typeof data.calories === 'number' ? data.calories : undefined,
           ts: new Date().toISOString(),
         };
+
         await appendFood(entry);
-        totalAdded += entry.calories ?? 0;
+        setConsumed(prev => prev + (entry.calories ?? 0));
       }
 
-      if (totalAdded > 0) {
-        setConsumed(prev => prev + totalAdded);
-      }
+      // 🧠 Prepare Buddy reply for typing
+      const finalReply = reply || 'No response from server 😅';
+      let i = 0;
 
-      // 👉 show exactly ONE bot message: backend's reply (already includes ✅ Logged + friendly line)
-      setMessages(prev => [...prev, { from: 'bot', text: reply || 'No response from server 😅' }]);
+      // Add empty bubble first
+      setMessages(prev => [...prev, { from: 'bot', text: '' }]);
+
+      // ✨ Smart typing function with human rhythm
+      const typeChar = () => {
+        i++;
+        setMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last.from === 'bot') last.text = finalReply.slice(0, i);
+          return updated;
+        });
+
+        scrollViewRef?.current?.scrollToEnd({ animated: true });
+
+        if (i < finalReply.length) {
+          // 🧩 Human realism:
+          // - Random speed variation
+          // - Small pause after punctuation or emoji
+          const char = finalReply[i];
+          let delay = 8 + Math.random() * 10; // base random typing speed
+          if (/[,.!?]/.test(char)) delay += 150; // short pause at sentence end
+          if (/[😊😅😂😋🍎🍌🍕🍽️🥗]/.test(char)) delay += 100; // tiny emoji pause
+          setTimeout(typeChar, delay);
+        } else {
+          setIsTyping(false);
+        }
+      };
+
+      // Start typing after a short “thinking” delay
+      setTimeout(typeChar, 350 + Math.random() * 200);
     } catch (error) {
       console.error('❌ Chat fetch error:', error);
       setIsTyping(false);
@@ -184,6 +203,7 @@ export default function ChatScreen() {
       ]);
     }
   };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -267,7 +287,7 @@ export default function ChatScreen() {
                     msg.from === 'user' ? styles.userText : styles.botText,
                   ]}
                 >
-                  {msg.from === 'user' ? `You: ${msg.text}` : `Buddy: ${msg.text}`}
+                  {msg.from === 'user' ? ` ${msg.text}` : ` ${msg.text}`}
                 </Text>
               </View>
             ))}
@@ -314,7 +334,7 @@ const styles = StyleSheet.create({
   messageBubble: { marginVertical: 6, padding: 12, borderRadius: 18, maxWidth: '85%' },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#DCF8C6',
+    backgroundColor: '#dcf8c6ff',
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     borderBottomLeftRadius: 14,
@@ -350,20 +370,34 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   greetingContainer: {
-    alignItems: 'flex-start',
-    width: '47%',
-    alignSelf: 'center',
+    alignItems: 'center',      // ✅ centers horizontally
+    justifyContent: 'center',  // centers vertically if needed
+    width: '100%',             // take full width for true center alignment
     marginTop: -120,
     marginBottom: 80,
   },
-  greetingText: { fontSize: 26, fontWeight: '700', color: '#222' },
-  dateText: { fontSize: 15, color: '#777', marginTop: 4, alignSelf: 'center' },
+
+  greetingText: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#222',
+    textAlign: 'center',       // ✅ ensures text itself is centered
+  },
+
+  dateText: {
+    fontSize: 15,
+    color: '#777',
+    marginTop: 4,
+    textAlign: 'center',       // ✅ centers date too
+  },
+
   caloriesTodayText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
     marginTop: 80,
     marginBottom: -50,
+    textAlign: 'center',       // ✅ keeps it aligned with greeting
   },
   separatorLine: {
     width: '75%',
