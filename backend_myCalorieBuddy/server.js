@@ -209,22 +209,41 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply, data: { action: "reset" }, totalCalories: 0 });
     }
 
-    /* ---------------------------------------------------------
-       🧩 REMOVE one item
-    --------------------------------------------------------- */
-    if (removalIntent) {
-      const parsed = await extractFood(user);
-      const foodName = parsed.food;
 
-      if (!foodName) {
-        reply = "Hmm, which food should I remove? 🤔";
-      } else {
-        const removed = updateFoodLog("remove", foodName);
-        reply = removed
-          ? `🧹 Removed "${foodName}" (${removed.calories} kcal). Total is now ${totalCalories()} kcal.`
-          : `I couldn’t find "${foodName}" in today’s log 🤷‍♂️`;
+    // 🧹 Handle multi-remove (corrected)
+    if (removalIntent) {
+      const fragments = user
+        .toLowerCase()
+        .split(/\b(?:and|plus|with|,)\b/g)
+        .map(f => f.trim())
+        .filter(f => f && f.length > 1);
+
+      const removedFoods = [];
+      for (const frag of fragments) {
+        const parsed = await extractFood(frag);
+        if (parsed.food) {
+          removedFoods.push(parsed.food);
+          updateFoodLog("remove", parsed.food); // use your local helper
+        }
       }
+
+      const totalNow = totalCalories();
+
+      if (removedFoods.length > 1) {
+        const list = removedFoods.join(', ');
+        reply = `🧹 Removed ${removedFoods.length} foods: ${list}. Total is now ${totalNow} kcal.`;
+      } else if (removedFoods.length === 1) {
+        reply = `🧹 Removed "${removedFoods[0]}". Total is now ${totalNow} kcal.`;
+      } else {
+        reply = "I couldn’t find any of those foods in your log. 😅";
+      }
+
+      history.push({ role: "assistant", content: reply });
+      lastIntent = "remove";
+      return res.json({ reply, data: { action: "remove" }, totalCalories: totalNow });
     }
+
+
 
     /* ---------------------------------------------------------
        🧩 ADD (improved multi-split)
