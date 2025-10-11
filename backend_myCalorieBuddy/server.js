@@ -1,4 +1,4 @@
-// 🧠 MyCalorieBuddy — Server v10.5 (Add + Remove + Reset All)
+// 🧠 MyCalorieBuddy — Server v10.6 (Improved Multi-Food Split + Smart Merge)
 
 import express from "express";
 import cors from "cors";
@@ -26,9 +26,9 @@ const timer = () => {
 function wantsLogging(message, lastIntent = "none") {
   const lower = message.toLowerCase();
   const verbs = [
-    "ate","had","got","ordered","cooked","made","grabbed","prepared",
-    "took","drank","consumed","finished","snacked on","devoured",
-    "enjoyed","tried","bought","log","logged"
+    "ate", "had", "got", "ordered", "cooked", "made", "grabbed", "prepared",
+    "took", "drank", "consumed", "finished", "snacked on", "devoured",
+    "enjoyed", "tried", "bought", "log", "logged"
   ];
   const hasVerb = verbs.some(v => lower.includes(v));
   if (hasVerb) return true;
@@ -39,12 +39,11 @@ function wantsLogging(message, lastIntent = "none") {
 
 function wantsRemoval(message) {
   const lower = message.toLowerCase();
-  const keywords = ["remove","delete","undo","erase","cancel",
-    "remove all","clear all","delete all","start fresh","reset day","reset log","reset today"];
+  const keywords = ["remove", "delete", "undo", "erase", "cancel",
+    "remove all", "clear all", "delete all", "start fresh", "reset day", "reset log", "reset today"];
   return keywords.some(k => lower.includes(k));
 }
 
-// ✅ NEW: robust detector for “reset all / start fresh”
 function wantsFullReset(message) {
   const lower = message.toLowerCase();
   const patterns = [
@@ -62,7 +61,7 @@ function wantsFullReset(message) {
 ------------------------------------------------------------- */
 const foodDB = {
   apple: 72, banana: 89, orange: 62, egg: 68, rice: 206, chicken: 165,
-  yogurt: 59, salad: 120, pasta: 220, pizza: 285, bread: 80,
+  yogurt: 59, salad: 120, pasta: 220, pizza: 285, bread: 80, potato: 130,
 };
 
 /* -------------------------------------------------------------
@@ -106,7 +105,7 @@ async function extractFood(userInput) {
         { role: "system", content: parserSys },
         { role: "user", content: userInput }
       ],
-      temperature: 0.15,
+      temperature: 0.25,
       max_tokens: 5000
     });
 
@@ -228,20 +227,21 @@ app.post("/chat", async (req, res) => {
     }
 
     /* ---------------------------------------------------------
-       🧩 ADD (includes multi-food)
+       🧩 ADD (improved multi-split)
     --------------------------------------------------------- */
     if (loggingIntent && !removalIntent) {
-      const userOnly = user;
+      const userOnly = user.toLowerCase();
 
-      const comboRegex = /\b(?:and|with|plus)\s+([\w\s\d]+)/gi;
-      const foodsFound = [];
-      let m; while ((m = comboRegex.exec(userOnly)) !== null) foodsFound.push(m[1].trim());
-      if (!foodsFound.includes(userOnly.trim())) foodsFound.unshift(userOnly.trim());
+      // ✨ New splitter logic
+      const fragments = userOnly
+        .split(/\b(?:and|with|plus)\b/g)
+        .map(f => f.trim())
+        .filter(f => f && f.length > 1);
 
       const results = [];
       const seen = new Set();
-      for (const fragment of foodsFound) {
-        const parsed = await extractFood(fragment);
+      for (const frag of fragments) {
+        const parsed = await extractFood(frag);
         if (parsed.food && parsed.calories) {
           const key = parsed.food.toLowerCase();
           if (seen.has(key)) continue;
@@ -252,7 +252,7 @@ app.post("/chat", async (req, res) => {
 
       if (results.length === 1) {
         data = results[0];
-        updateFoodLog("add", data.food, data.calories); // keep running total for ring
+        updateFoodLog("add", data.food, data.calories);
         reply = `✅ Logged "${data.food}" (${data.calories} kcal)\n${reply}`;
       } else if (results.length > 1) {
         data = results;
@@ -265,18 +265,31 @@ app.post("/chat", async (req, res) => {
       }
     }
 
+    // 🧹 Merge duplicate “Logged” lines
+    const lines = reply.split("\n");
+    const loggedLines = lines.filter(l => l.trim().startsWith("✅ Logged"));
+    const otherLines = lines.filter(l => !l.trim().startsWith("✅ Logged"));
+    let mergedLogged = "";
+
+    if (loggedLines.length > 1) {
+      const foods = loggedLines.map(l => {
+        const match = l.match(/"([^"]+)"\s*\((\d+)\s*kcal\)/);
+        return match ? `${match[1]} (${match[2]} kcal)` : l;
+      });
+      const total = foods
+        .map(f => parseInt(f.match(/\((\d+)\s*kcal\)/)?.[1] || "0"))
+        .reduce((a, b) => a + b, 0);
+
+      mergedLogged = `✅ Logged ${foods.length} foods: ${foods.join(", ")} — ${total} kcal`;
+    } else if (loggedLines.length === 1) {
+      mergedLogged = loggedLines[0];
+    }
+
+    reply = [mergedLogged, ...otherLines].filter(Boolean).join("\n");
+
     history.push({ role: "assistant", content: reply });
     if (history.length > MAX_HISTORY) history.shift();
     lastIntent = loggingIntent ? "log" : removalIntent ? "remove" : "none";
-
-    // 🧹 dedupe lines
-    const dedup = [];
-    const seenLines = new Set();
-    for (const line of reply.split("\n")) {
-      const t = line.trim();
-      if (!t || !seenLines.has(t)) { dedup.push(line); seenLines.add(t); }
-    }
-    reply = dedup.join("\n");
 
     res.json({ reply, data, totalCalories: totalCalories() });
   } catch (err) {
@@ -295,5 +308,5 @@ app.post("/chat", async (req, res) => {
    🚀 Launch Server
 ------------------------------------------------------------- */
 app.listen(3000, () =>
-  console.log("🚀 Buddy Server v10.5 (Add + Remove + Reset All) running on http://localhost:3000")
+  console.log("🚀 Buddy Server v10.6 (Improved Multi-Food Split + Smart Merge) running on http://localhost:3000")
 );
