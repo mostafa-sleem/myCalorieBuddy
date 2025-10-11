@@ -265,31 +265,41 @@ app.post("/chat", async (req, res) => {
       }
     }
 
-    // 🧹 Merge duplicate “Logged” lines
-    const lines = reply.split("\n");
-    const loggedLines = lines.filter(l => l.trim().startsWith("✅ Logged"));
-    const otherLines = lines.filter(l => !l.trim().startsWith("✅ Logged"));
-    let mergedLogged = "";
 
-    if (loggedLines.length > 1) {
-      const foods = loggedLines.map(l => {
-        const match = l.match(/"([^"]+)"\s*\((\d+)\s*kcal\)/);
-        return match ? `${match[1]} (${match[2]} kcal)` : l;
-      });
-      const total = foods
-        .map(f => parseInt(f.match(/\((\d+)\s*kcal\)/)?.[1] || "0"))
-        .reduce((a, b) => a + b, 0);
 
-      mergedLogged = `✅ Logged ${foods.length} foods: ${foods.join(", ")} — ${total} kcal`;
-    } else if (loggedLines.length === 1) {
-      mergedLogged = loggedLines[0];
+
+    // 🧹 Remove extra duplicate "✅ Logged" lines from GPT replies
+    const lines = reply.split("\n").map(l => l.trim()).filter(Boolean);
+    const cleaned = [];
+    let loggedLine = null;
+
+    for (const line of lines) {
+      if (line.startsWith("✅ Logged")) {
+        // keep only the first logged line (or the one that mentions multiple foods)
+        if (!loggedLine) {
+          loggedLine = line;
+          cleaned.push(line);
+        } else {
+          // if a later one is longer and mentions multiple foods, replace the old one
+          if ((line.match(/,/g) || []).length > (loggedLine.match(/,/g) || []).length) {
+            cleaned[cleaned.length - 1] = line;
+            loggedLine = line;
+          }
+        }
+      } else {
+        cleaned.push(line);
+      }
     }
+    reply = cleaned.join("\n");
 
-    reply = [mergedLogged, ...otherLines].filter(Boolean).join("\n");
 
-    history.push({ role: "assistant", content: reply });
-    if (history.length > MAX_HISTORY) history.shift();
-    lastIntent = loggingIntent ? "log" : removalIntent ? "remove" : "none";
+
+
+
+
+
+
+
 
     res.json({ reply, data, totalCalories: totalCalories() });
   } catch (err) {

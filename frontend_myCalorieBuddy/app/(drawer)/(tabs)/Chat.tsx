@@ -107,12 +107,14 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
-  // ✅ Smarter sendMessage (supports add + remove)
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const newMessages = [...messages, { from: 'user', text: input }];
-    setMessages(newMessages);
+    const userMsg = { id: `u-${Date.now()}`, from: 'user', text: input };
+    setMessages(prev => [...prev, userMsg]);
+
     const userMessage = input;
     setInput('');
     Keyboard.dismiss();
@@ -126,19 +128,13 @@ export default function ChatScreen() {
       });
 
       const { reply, data, totalCalories } = await response.json();
-      setIsTyping(false);
       console.log('🧠 Backend data:', data, totalCalories);
 
-
-      // 💨 Handle full reset (e.g. "remove all foods", "start fresh")
-      if (data && data.action === "reset") {
-        await clearAllFoods(); // helper in your storage file
-        setConsumed(0);        // reset the ring
-      }
-
-
-      // 🧩 Handle ADD
-      if (data && data.food && !userMessage.toLowerCase().includes('remove') && !userMessage.toLowerCase().includes('delete')) {
+      // ⚙️ Update calories
+      if (data?.action === 'reset') {
+        await clearAllFoods();
+        setConsumed(0);
+      } else if (data?.food && !userMessage.toLowerCase().includes('remove')) {
         const entry: FoodEntry = {
           id: `${Date.now()}-${data.food}`,
           food: String(data.food),
@@ -147,62 +143,55 @@ export default function ChatScreen() {
           calories: typeof data.calories === 'number' ? data.calories : undefined,
           ts: new Date().toISOString(),
         };
-
         await appendFood(entry);
         setConsumed(prev => prev + (entry.calories ?? 0));
+      } else if (userMessage.toLowerCase().includes('remove') && data?.food) {
+        await removeFood(data.food);
       }
+      if (typeof totalCalories === 'number') setConsumed(totalCalories);
 
-
-      // 🧹 Handle REMOVE or any calorie update
-      if (userMessage.toLowerCase().includes('remove') || userMessage.toLowerCase().includes('delete') || userMessage.toLowerCase().includes('undo')) {
-        if (data && data.food) {
-          await removeFood(data.food);
-        }
-      }
-
-      // ✅ Always update total if backend provides it
-      if (typeof totalCalories === 'number') {
-        setConsumed(totalCalories);
-      }
-
-
-      // ✨ Typing simulation for Buddy’s reply
+      // 💬 Buddy typing animation (stable)
       const finalReply = reply || 'No response from server 😅';
-      let i = 0;
-      setMessages(prev => [...prev, { from: 'bot', text: '' }]);
 
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+
+      const botId = `b-${Date.now()}`;
+      // create one bubble
+      setMessages(prev => [...prev, { id: botId, from: 'bot', text: '' }]);
+
+      let i = 0;
       const typeChar = () => {
         i++;
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last.from === 'bot') last.text = finalReply.slice(0, i);
-          return updated;
-        });
+        setMessages(prev =>
+          prev.map(m => (m.id === botId ? { ...m, text: finalReply.slice(0, i) } : m))
+        );
 
-        scrollViewRef?.current?.scrollToEnd({ animated: true });
+        scrollViewRef.current?.scrollToEnd({ animated: true });
 
         if (i < finalReply.length) {
           const char = finalReply[i];
           let delay = 8 + Math.random() * 10;
           if (/[,.!?]/.test(char)) delay += 150;
           if (/[😊😅😂😋🍎🍌🍕🍽️🥗]/.test(char)) delay += 100;
-          setTimeout(typeChar, delay);
+          typingTimeout.current = setTimeout(typeChar, delay);
         } else {
           setIsTyping(false);
+          typingTimeout.current = null;
         }
       };
 
-      setTimeout(typeChar, 350 + Math.random() * 200);
+      typingTimeout.current = setTimeout(typeChar, 250 + Math.random() * 200);
     } catch (error) {
       console.error('❌ Chat fetch error:', error);
       setIsTyping(false);
       setMessages(prev => [
         ...prev,
-        { from: 'bot', text: '❌ Connection error. Please try again later.' },
+        { id: `e-${Date.now()}`, from: 'bot', text: '❌ Connection error. Please try again later.' },
       ]);
     }
   };
+
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
